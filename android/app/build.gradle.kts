@@ -2,9 +2,10 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    // NOTE: com.google.gms.google-services is intentionally NOT applied here.
-    // See docs/FIREBASE_SETUP.md — applying it without a real google-services.json
-    // would break the build. The owner adds it together with the real config file.
+    // Reads android/app/google-services.json (dedicated PigeonHub project,
+    // package com.pigeonhub.app). The file is gitignored; a missing file fails
+    // the build on purpose so config never silently drifts.
+    alias(libs.plugins.google.services)
 }
 
 android {

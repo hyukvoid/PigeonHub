@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -118,6 +119,20 @@ private fun FcmCard(onCopyToken: () -> Unit) {
     var fcmState by remember { mutableStateOf<FirebaseGate.FcmState?>(null) }
     val scope = rememberCoroutineScope()
 
+    fun checkToken() {
+        scope.launch {
+            fcmState = withContext(Dispatchers.IO) {
+                FirebaseGate.fetchTokenBlocking(context)
+            }
+        }
+    }
+
+    // Firebase configured: fetch the real FCM registration token automatically
+    // on first entry; the button stays for manual re-checks.
+    LaunchedEffect(configured) {
+        if (configured) checkToken()
+    }
+
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("FCM registration", style = MaterialTheme.typography.titleMedium)
@@ -135,14 +150,8 @@ private fun FcmCard(onCopyToken: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                Button(onClick = {
-                    scope.launch {
-                        fcmState = withContext(Dispatchers.IO) {
-                            FirebaseGate.fetchTokenBlocking(context)
-                        }
-                    }
-                }) {
-                    Text("Check FCM registration")
+                FilledTonalButton(onClick = { checkToken() }) {
+                    Text("Re-check FCM registration")
                 }
             }
 

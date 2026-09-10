@@ -1,9 +1,11 @@
-// Root build file. Firebase (google-services plugin) is intentionally NOT applied:
-// the project owner will register com.pigeonhub.app in their own Firebase console
-// and drop the matching google-services.json in android/app/ (see docs/FIREBASE_SETUP.md).
-// The build must stay green without any Firebase configuration.
+// Root build file.
+// The google-services plugin is now ACTIVE: the owner registered com.pigeonhub.app
+// in the dedicated PigeonHub Firebase project (pigeonhub-b958d) and provided the
+// matching android/app/google-services.json (gitignored — never commit it).
+// The build fails without that file by design; see docs/FIREBASE_SETUP.md.
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.google.services) apply false
 }

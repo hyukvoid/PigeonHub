@@ -34,10 +34,10 @@
             </intent-filter>
         </service>
 
-        <!-- Avoid silent background token rotation while Firebase is not configured. -->
-        <meta-data
-            android:name="firebase_messaging_auto_init_enabled"
-            android:value="false" />
+        <!-- Firebase IS configured now (dedicated project, com.pigeonhub.app).
+             Auto-init stays on so onNewToken/ rotations reach the app; the
+             token itself is surfaced through FirebaseGate + the Device tab.
+             Analytics collection remains off. -->
         <meta-data
             android:name="firebase_analytics_collection_enabled"
             android:value="false" />

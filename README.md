@@ -6,12 +6,14 @@ Push notifications for developers, straight from a `curl` request to your pocket
 HTTP request ──▶ dev sender (Fastify) ──▶ Firebase Cloud Messaging ──▶ Android device ──▶ PigeonHub notification ──▶ Inbox
 ```
 
-**Status: night-001 prototype.** The Android client and the local dev sender are
-implemented and tested. The real FCM hop is `BLOCKED_PENDING_FIREBASE_SETUP` —
-the project owner must register `com.pigeonhub.app` in their own Firebase
-console and drop in the matching config (see [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)).
-Until then the client pipeline is fully exercisable locally (in-app test push +
-adb injector), and the sender runs in a mock transport mode.
+**Status: FCM registration LIVE, real send pending one credential.** The
+Android client builds and runs with the dedicated Firebase project
+(`pigeonhub-b958d`, package `com.pigeonhub.app`): the Device tab fetches a real
+FCM registration token. The only remaining step for true end-to-end push is the
+owner-provided service account JSON for the dev sender
+(see [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) — until then `/push`
+runs in mock mode). The client pipeline is also fully exercisable locally
+(in-app test push + adb injector).
 
 ## Repository layout
 

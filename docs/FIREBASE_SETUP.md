@@ -1,6 +1,20 @@
-# Firebase setup for PigeonHub (post night-001)
+# Firebase setup for PigeonHub
 
-Night-001 ships **without** Firebase configuration. Everything Firebase-related
+## Status update (post night-001)
+
+**DONE (owner + this repo):** dedicated Firebase project `pigeonhub-b958d`,
+Android app registered as `com.pigeonhub.app`, `google-services.json` in
+`android/app/` (gitignored), google-services plugin 4.5.0 active, FCM
+auto-init enabled. The app fetches and displays a REAL FCM registration token
+on the Device tab (masked + copy button). Verified on emulator:
+`FirebaseApp initialization successful` + a live token (142 chars, masked in UI).
+
+**REMAINING (owner):** step 2 below — service account JSON + token into the
+sender env — and the curl send test. Until then `POST /push` runs in mock mode.
+
+Original checklist (kept for reference / new machines):
+
+Night-001 shipped **without** Firebase configuration. Everything Firebase-related
 is intentionally `BLOCKED_PENDING_FIREBASE_SETUP`. This document is the exact
 checklist the project owner runs afterwards.
 
@@ -16,7 +30,7 @@ Rules (night-001 constraints that stay in force):
 - Never commit `google-services.json` or service account keys. `.gitignore`
   already blocks them.
 
-## 1. Android app: google-services.json
+## 1. Android app: google-services.json  ✅ DONE
 
 1. Firebase Console → *Add project* (or your dedicated PigeonHub project).
 2. Project settings → *Your apps* → **Add app → Android**.
@@ -38,7 +52,7 @@ is missing). Once the file exists, enable it:
    to the `plugins {}` block (the `// NOTE:` comment marks the spot).
 4. `cd android && ./gradlew :app:assembleDebug && adb install -r app/build/outputs/apk/debug/app-debug.apk`
 
-### 6. Verify registration
+### 6. Verify registration  ✅ DONE (verified on emulator; Device tab shows the masked token)
 
 1. Launch PigeonHub → **Device** tab. The FCM card should no longer say
    `BLOCKED_PENDING_FIREBASE_SETUP`.
