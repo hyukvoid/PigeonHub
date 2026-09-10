@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only manifest: adb-driven test push injector. Lets us exercise the
+     exact notification pipeline (validate, dedupe, render) from a cold process
+     without Firebase. The full command lives in the Device tab and in
+     README.md. Compiled only into debug builds. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <receiver
+            android:name=".debug.TestPushReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="app.pigeonhub.debug.TEST_PUSH" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

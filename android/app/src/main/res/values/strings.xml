@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">PigeonHub</string>
+
+    <!-- Notification channels. Names are user-facing; importance is set in code. -->
+    <string name="channel_normal_name">PigeonHub Normal</string>
+    <string name="channel_normal_description">Regular PigeonHub notifications</string>
+    <string name="channel_high_name">PigeonHub High</string>
+    <string name="channel_high_description">Urgent PigeonHub notifications that can appear as heads-up</string>
+</resources>
