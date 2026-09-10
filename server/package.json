@@ -1,0 +1,22 @@
+{
+  "name": "pigeonhub-dev-sender",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DISPOSABLE local development sender for PigeonHub (curl -> FCM). Production backend direction is Cloudflare Workers + D1 — do not grow this into a product.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "firebase-admin": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
