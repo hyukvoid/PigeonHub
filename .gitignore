@@ -1,0 +1,44 @@
+# ---- Secrets / credentials: NEVER commit ----
+# Firebase Android config (must be provided by the project owner after
+# registering com.pigeonhub.app in their own Firebase console).
+**/google-services.json
+**/google-services.defaults.json
+# Firebase service account keys
+**/serviceAccountKey*.json
+**/*firebase-adminsdk*.json
+**/*service_account*.json
+# Environment files
+.env
+.env.*
+!.env.example
+# Local secret folders (e.g. server/secrets/)
+server/secrets/
+android/secrets/
+
+# ---- Android / Gradle ----
+*.apk
+*.aab
+*.aab.id
+*.keystore
+!debug.keystore
+*.jks
+local.properties
+.gradle/
+build/
+*/build/
+!gradle/wrapper/gradle-wrapper.jar
+captures/
+.externalNativeBuild
+.cxx/
+
+# ---- Node / server ----
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+
+# ---- IDE / OS ----
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
