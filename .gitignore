@@ -49,6 +49,9 @@ pnpm-debug.log*
 
 # ---- Cloudflare worker ----
 
+worker/inject_*.sql
+worker/gen_*.cjs
+
 .dev.vars
 .dev.vars.*
 .wrangler/
