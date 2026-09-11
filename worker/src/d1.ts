@@ -36,19 +36,26 @@ function bucketStart(kind: "daily" | "minute", now = new Date()): string {
   return kind === "daily" ? iso.slice(0, 10) : iso.slice(0, 16);
 }
 
+function quotaLimits(env: Env): { minute: number; daily: number; globalDaily: number } {
+  return {
+    minute: Number(env.QUOTA_MINUTE_LIMIT ?? "5"),
+    daily: Number(env.QUOTA_DAILY_LIMIT ?? "50"),
+    globalDaily: Number(env.GLOBAL_DAILY_LIMIT ?? "1000"),
+  };
+}
+
 /**
  * Atomic, guarded consumption: the counter only increments while it is below
  * the limit, so concurrent requests can never push acceptance past the limit.
  * Returns the new count, or null when the bucket is exhausted.
  */
 async function consumeQuota(
-  env: Env,
-  kind: "daily" | "minute",
+  scope: string,
+  bucket: string,
   limit: number,
+  db: D1Database,
 ): Promise<number | null> {
-  const scope = `${env.CHANNEL_ID ?? "dev"}|${kind}`;
-  const bucket = bucketStart(kind);
-  const result = await env.DB.prepare(
+  const result = await db.prepare(
     `INSERT INTO quota_buckets (scope, bucket_start, accepted_count)
      VALUES (?1, ?2, 1)
      ON CONFLICT(scope, bucket_start) DO UPDATE
@@ -62,32 +69,35 @@ async function consumeQuota(
 }
 
 /** Returns a consumed quota slot (used when a racing insert loses idempotency). */
-export async function refundQuota(env: Env): Promise<void> {
-  const daily = Number(env.QUOTA_DAILY_LIMIT ?? "50");
-  const minute = Number(env.QUOTA_MINUTE_LIMIT ?? "5");
+export async function refundQuota(env: Env, scopeBase: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       `UPDATE quota_buckets SET accepted_count = MAX(accepted_count - 1, 0)
        WHERE scope = ?1 AND bucket_start = ?2`,
-    ).bind(`${env.CHANNEL_ID ?? "dev"}|minute`, bucketStart("minute")),
+    ).bind(`${scopeBase}|minute`, bucketStart("minute")),
     env.DB.prepare(
       `UPDATE quota_buckets SET accepted_count = MAX(accepted_count - 1, 0)
        WHERE scope = ?1 AND bucket_start = ?2`,
-    ).bind(`${env.CHANNEL_ID ?? "dev"}|daily`, bucketStart("daily")),
+    ).bind(`${scopeBase}|daily`, bucketStart("daily")),
   ]);
-  void daily;
-  void minute;
 }
 
-/** 429 when the minute or the daily bucket is exhausted. FCM and D1-insert untouched. */
-export async function enforceQuota(env: Env): Promise<void> {
-  const minuteLimit = Number(env.QUOTA_MINUTE_LIMIT ?? "5");
-  const dailyLimit = Number(env.QUOTA_DAILY_LIMIT ?? "50");
-  if ((await consumeQuota(env, "minute", minuteLimit)) === null) {
+/** 429 when the minute, per-scope daily, or global daily bucket is exhausted. */
+export async function enforceQuota(env: Env, scopeBase: string): Promise<void> {
+  const limits = quotaLimits(env);
+  if (
+    (await consumeQuota(`${scopeBase}|minute`, bucketStart("minute"), limits.minute, env.DB)) ===
+    null
+  ) {
     throw new Error("quota:minute");
   }
-  if ((await consumeQuota(env, "daily", dailyLimit)) === null) {
+  if (
+    (await consumeQuota(`${scopeBase}|daily`, bucketStart("daily"), limits.daily, env.DB)) === null
+  ) {
     throw new Error("quota:daily");
+  }
+  if ((await consumeQuota("global|daily", bucketStart("daily"), limits.globalDaily, env.DB)) === null) {
+    throw new Error("quota:global");
   }
 }
 
@@ -98,6 +108,7 @@ export interface IdempotencyLookup {
 
 export async function lookupIdempotency(
   env: Env,
+  channelId: string,
   key: string,
   requestHash: string,
 ): Promise<IdempotencyLookup> {
@@ -105,7 +116,7 @@ export async function lookupIdempotency(
     `SELECT id, seq, push_status, request_hash, fcm_message_id, last_error
      FROM messages WHERE channel_id = ?1 AND idempotency_key = ?2`,
   )
-    .bind(env.CHANNEL_ID ?? "dev", key)
+    .bind(channelId, key)
     .first<StoredMessage>();
   if (!row) return { replay: null, conflict: false };
   return { replay: row, conflict: row.request_hash !== requestHash };
@@ -144,11 +155,11 @@ function classifyUniqueRace(text: string): "idem" | "seq" | null {
 /** Insert as `pending`. seq = channel MAX(seq)+1 allocated inside the statement. */
 export async function insertPendingMessage(
   env: Env,
+  channelId: string,
   push: ResolvedPush,
   requestHash: string,
   idempotencyKey: string | null,
 ): Promise<number> {
-  const channelId = env.CHANNEL_ID ?? "dev";
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MESSAGES_TTL_DAYS * 86_400_000).toISOString();
   const id = push.message_id;

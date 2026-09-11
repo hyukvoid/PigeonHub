@@ -19,8 +19,15 @@ export interface Env {
   CHANNEL_ID?: string;
   QUOTA_DAILY_LIMIT?: string;
   QUOTA_MINUTE_LIMIT?: string;
+  /** Global daily acceptance ceiling across all installations (free-tier protection). */
+  GLOBAL_DAILY_LIMIT?: string;
   /** "on" only on the test worker — enables X-PigeonHub-Fail-At handling. */
   FAILURE_INJECTION?: string;
+
+  /** MVP-001C: SHA-256 hex hashes of the single-use beta invite codes. */
+  INVITE_HASHES?: string;
+  /** MVP-001C: base64 256-bit application key used to AES-GCM-encrypt FCM tokens at rest. */
+  FCM_TOKEN_ENCRYPTION_KEY?: string;
 }
 
 export type Priority = "normal" | "high";

@@ -26,6 +26,7 @@ export async function sendToFcm(
     FIREBASE_PRIVATE_KEY: string;
   },
   push: ResolvedPush,
+  targetToken: string,
 ): Promise<FcmSendResult> {
   let accessToken: string;
   let authSource: "cache" | "fresh";
@@ -53,7 +54,7 @@ export async function sendToFcm(
         },
         body: JSON.stringify({
           message: {
-            token: push.targetToken,
+            token: targetToken,
             data: {
               message_id: push.message_id,
               title: push.title,

@@ -63,6 +63,7 @@ dependencies {
     // (FirebaseApp simply never initializes). It exists so the FCM service
     // boundary in push/PigeonMessagingService.kt is real code, not a stub.
     implementation(libs.firebase.messaging)
+    implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.ui.tooling)

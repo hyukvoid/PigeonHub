@@ -3,6 +3,7 @@ package com.pigeonhub.app.push
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.pigeonhub.app.push.installation.InstallationRepository
 
 /**
  * FCM entry point. Inert until the project owner adds a real google-services.json
@@ -28,6 +29,8 @@ class PigeonMessagingService : FirebaseMessagingService() {
         // Persist for the debug screen only. Never log the full token.
         DevicePrefs.saveFcmToken(applicationContext, token)
         Log.i(TAG, "FCM token rotated (length=${token.length})")
+        // MVP-001C lifecycle: authenticated, versioned server update.
+        InstallationRepository.onNewToken(applicationContext, token)
     }
 
     private companion object {

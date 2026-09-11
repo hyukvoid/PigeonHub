@@ -25,9 +25,13 @@ runs in mock mode). The client pipeline is also fully exercisable locally
 | `docs/` | Setup guides, payload contract, session reports |
 
 > **Backend direction (decided):** production is **Cloudflare Workers + D1 + FCM**.
-> Durable accept is live (`stored: true` ⇒ the message is in D1 before FCM runs;
-> idempotency + per-channel quota + pending-state recovery queries verified —
-> see [docs/mvp-001b-d1-durable-core-report.md](docs/mvp-001b-d1-durable-core-report.md)).
+> **Private installations are live**: a fresh Android install generates its own
+> management secret + write token (Keystore-encrypted, persisted before any
+> network request), bootstraps with a single-use invite code, and gets a private
+> publish endpoint. Copy cURL from the app and push yourself — no FCM token
+> handling, no server-issued secrets. Reports:
+> [mvp-001b-d1-durable-core](docs/mvp-001b-d1-durable-core-report.md) ·
+> [mvp-001c-retry-safe-bootstrap](docs/mvp-001c-retry-safe-bootstrap-report.md)
 
 ### Worker quick start
 

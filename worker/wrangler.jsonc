@@ -12,7 +12,8 @@
     // Development channel + free-tier protection quotas (per channel scope).
     "CHANNEL_ID": "dev",
     "QUOTA_DAILY_LIMIT": "50",
-    "QUOTA_MINUTE_LIMIT": "5"
+    "QUOTA_MINUTE_LIMIT": "5",
+    "GLOBAL_DAILY_LIMIT": "1000"
   },
   "d1_databases": [
     {

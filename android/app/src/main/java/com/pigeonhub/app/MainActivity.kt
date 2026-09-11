@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.pigeonhub.app.push.InboxStore
 import com.pigeonhub.app.push.NotificationChannels
 import com.pigeonhub.app.push.NotificationRenderer
+import com.pigeonhub.app.push.installation.InstallationRepository
 import com.pigeonhub.app.ui.PigeonHubApp
 import com.pigeonhub.app.ui.TapInfo
 import com.pigeonhub.app.ui.theme.PigeonHubTheme
@@ -20,6 +21,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationChannels.ensureCreated(this)
+        InstallationRepository.start(this)
         enableEdgeToEdge()
         setContent {
             PigeonHubTheme {

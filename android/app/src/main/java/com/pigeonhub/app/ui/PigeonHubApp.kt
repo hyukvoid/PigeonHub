@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -27,6 +28,7 @@ import kotlinx.coroutines.launch
 
 enum class Section(val label: String, val icon: ImageVector) {
     Inbox("Inbox", Icons.Filled.Inbox),
+    MyPush("My Push", Icons.Outlined.Notifications),
     Device("Device", Icons.Outlined.PhoneAndroid),
     Settings("Settings", Icons.Outlined.Settings),
 }
@@ -64,6 +66,7 @@ fun PigeonHubApp(tap: TapInfo?) {
         Box(Modifier.padding(padding)) {
             when (section) {
                 Section.Inbox -> HomeScreen(tap = tap, showSnackbar = showSnackbar)
+                Section.MyPush -> MyPushScreen(showSnackbar = showSnackbar)
                 Section.Device -> DeviceScreen(showSnackbar = showSnackbar)
                 Section.Settings -> SettingsScreen(showSnackbar = showSnackbar)
             }
