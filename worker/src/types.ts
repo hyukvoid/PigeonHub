@@ -26,6 +26,8 @@ export interface Env {
 
   /** MVP-001C: SHA-256 hex hashes of the single-use beta invite codes. */
   INVITE_HASHES?: string;
+  /** MVP-002A: separate single-use invite pool for automated tests (never the beta pool). */
+  INVITE_TEST_HASHES?: string;
   /** MVP-001C: base64 256-bit application key used to AES-GCM-encrypt FCM tokens at rest. */
   FCM_TOKEN_ENCRYPTION_KEY?: string;
   /** MVP-001E: beta gate — bootstrap rejects fresh registrations at this installation count. */

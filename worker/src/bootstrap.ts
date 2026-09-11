@@ -100,13 +100,18 @@ export function verifyInviteFormat(code: string): boolean {
 
 /** Returns the invite hash (invite_id) for a valid code, or null for unknown codes. */
 export async function resolveInvite(env: Env, code: string): Promise<string | null> {
-  if (!env.INVITE_HASHES) return null;
-  let hashes: string[];
+  let hashes: string[] = [];
   try {
-    hashes = JSON.parse(env.INVITE_HASHES) as string[];
+    hashes = JSON.parse(env.INVITE_HASHES ?? "[]") as string[];
   } catch {
-    return null;
+    hashes = [];
   }
+  try {
+    hashes = hashes.concat(JSON.parse(env.INVITE_TEST_HASHES ?? "[]") as string[]);
+  } catch {
+    // test pool optional
+  }
+  if (hashes.length === 0) return null;
   const candidate = await sha256Hex(code);
   for (const hash of hashes) {
     if (constantTimeEquals(hash, candidate)) return candidate;

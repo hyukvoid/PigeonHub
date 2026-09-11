@@ -9,6 +9,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +39,8 @@ data class InboxMessage(
     /** "FCM" (realtime wake-up) or "SYNC" (recovered from D1). */
     val received_via: String,
     val local_received_at: Long,
+    /** Set when the app's own FCM callback received this message (MVP-002A). */
+    val device_received_at: Long? = null,
     /** Local-only unread state; server sync never overwrites it. */
     val is_read: Boolean = false,
     val read_at: Long? = null,
@@ -58,17 +62,21 @@ abstract class InboxDao {
      * received_via/local_received_at keep the first arrival; is_read/read_at
      * are never overwritten by a later FCM or sync.
      */
+    /**
+     * SYNC upsert: content refresh that PRESERVES local metadata and any FCM
+     * delivery evidence (device_received_at) — sync never overwrites them.
+     */
     @Query(
         "INSERT INTO inbox_messages " +
             "(message_id, channel_id, seq, title, message, priority, url, " +
-            "created_at, expires_at, received_via, local_received_at, is_read, read_at) " +
+            "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at) " +
             "VALUES (:messageId, :channelId, :seq, :title, :message, :priority, :url, " +
-            ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, 0, NULL) " +
+            ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, NULL, 0, NULL) " +
             "ON CONFLICT(message_id) DO UPDATE SET " +
             "title = excluded.title, message = excluded.message, priority = excluded.priority, " +
             "url = excluded.url, expires_at = excluded.expires_at",
     )
-    abstract fun insertPreservingLocal(
+    abstract fun insertFromSync(
         messageId: String,
         channelId: String,
         seq: Int,
@@ -80,6 +88,37 @@ abstract class InboxDao {
         expiresAt: String,
         receivedVia: String,
         localReceivedAt: Long,
+    )
+
+    /**
+     * FCM upsert: realtime delivery. Marks device_received_at (first FCM
+     * callback wins; a sync-first row is upgraded, never duplicated). seq is
+     * nullable so legacy payloads without coordinates still land.
+     */
+    @Query(
+        "INSERT INTO inbox_messages " +
+            "(message_id, channel_id, seq, title, message, priority, url, " +
+            "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at) " +
+            "VALUES (:messageId, :channelId, :seq, :title, :message, :priority, :url, " +
+            ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, :deviceReceivedAt, 0, NULL) " +
+            "ON CONFLICT(message_id) DO UPDATE SET " +
+            "title = excluded.title, message = excluded.message, priority = excluded.priority, " +
+            "url = excluded.url, expires_at = excluded.expires_at, " +
+            "device_received_at = COALESCE(inbox_messages.device_received_at, excluded.device_received_at)",
+    )
+    abstract fun insertFromFcm(
+        messageId: String,
+        channelId: String,
+        seq: Int?,
+        title: String,
+        message: String,
+        priority: String,
+        url: String?,
+        createdAt: String,
+        expiresAt: String,
+        receivedVia: String,
+        localReceivedAt: Long,
+        deviceReceivedAt: Long,
     )
 
     @Query("SELECT * FROM inbox_messages WHERE message_id = :messageId")
@@ -103,6 +142,9 @@ abstract class InboxDao {
     @Upsert
     abstract fun setSyncState(state: SyncState)
 
+    @Query("SELECT * FROM sync_state WHERE id = 1")
+    abstract fun syncState(): SyncState?
+
     @Query("UPDATE sync_state SET history_truncated = :truncated WHERE id = 1")
     abstract fun setHistoryTruncated(truncated: Boolean)
 
@@ -114,9 +156,9 @@ abstract class InboxDao {
     open fun commitPage(messages: List<InboxMessage>, cursor: Int, truncated: Boolean) {
         val now = System.currentTimeMillis()
         messages.forEach { m ->
-            insertPreservingLocal(
+            insertFromSync(
                 m.message_id, m.channel_id, m.seq, m.title, m.message, m.priority,
-                m.url, m.created_at, m.expires_at, m.received_via, now,
+                m.url, m.created_at, m.expires_at, "SYNC", now,
             )
         }
         setSyncState(SyncState(id = 1, last_synced_seq = cursor, last_sync_at = now))

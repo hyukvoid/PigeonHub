@@ -138,6 +138,11 @@ object InstallationRepository {
     @Volatile
     private var currentCredentials: CredentialVault.Credentials? = null
 
+    /** message_id of the most recent user-facing test notification (delivery tracking). */
+    @Volatile
+    var lastTestMessageId: String? = null
+        private set
+
     /** generate → encrypt → persist. Called only in UNINITIALIZED. */
     suspend fun ensureLocalCredentials(context: Context) = mutex.withLock {
         if (mutableState.value.status != BootstrapStatus.UNINITIALIZED) return@withLock
@@ -306,6 +311,7 @@ object InstallationRepository {
             )
         }
         val json = runCatching { JSONObject(response.body) }.getOrNull()
+        lastTestMessageId = json?.optString("message_id")
         val stored = json?.optBoolean("stored") ?: false
         val pushStatus = json?.optString("push_status") ?: "HTTP ${response.code}"
         return (response.code in 200..299 && stored) to pushStatus

@@ -4,15 +4,16 @@ import android.content.Context
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import com.pigeonhub.app.data.InboxDatabase
-import com.pigeonhub.app.data.InboxMessage
 
 /**
- * Single entry point for a realtime push (FCM service, adb debug receiver,
- * in-app test buttons). MVP-001D: the durable Room inbox IS the inbox state.
+ * Realtime push entry point (FCM service; adb debug receiver and debug-only
+ * in-app test buttons feed the same path). MVP-002A: the durable Room inbox IS
+ * the inbox state, and the FCM callback marks delivery evidence.
  *
  * Order per spec: payload validation → dedupe/upsert → Room → notification.
- * The notification is posted only when the message is NEW to Room; a delayed
- * or duplicated FCM after a sync never re-notifies (Room count stays 1).
+ * Notification policy: posted only when the message is NEW to Room — a delayed
+ * or duplicated FCM after a sync never re-notifies and never creates a second
+ * row (DEVICE_PUSH_RECEIVED evidence is upgraded on the existing row instead).
  */
 object PushPipeline {
 
@@ -38,27 +39,27 @@ object PushPipeline {
             is PushPayloadValidator.ParseResult.Valid -> parsed.payload
         }
 
-        // Durable upsert: message_id is the canonical dedupe identity. A
-        // repeated or delayed delivery updates content but never creates a
-        // second row (Room UNIQUE(message_id) + preserving upsert).
         val db = InboxDatabase.get(appContext)
         val dao = db.inboxDao()
         val existing = dao.byId(payload.messageId)
-        val receivedVia = if (source == "fcm") "FCM" else "FCM"
+        val now = System.currentTimeMillis()
 
+        // Realtime delivery: records device_received_at (first callback wins;
+        // a sync-first row is upgraded with delivery evidence, never duplicated).
         db.runInTransaction {
-            dao.insertPreservingLocal(
+            dao.insertFromFcm(
                 messageId = payload.messageId,
                 channelId = payload.channelId ?: "dev",
-                seq = payload.seq ?: 0,
+                seq = payload.seq,
                 title = payload.title,
                 message = payload.message,
                 priority = payload.priority.name.lowercase(),
                 url = payload.url,
                 createdAt = payload.sentAt ?: "",
                 expiresAt = "",
-                receivedVia = receivedVia,
-                localReceivedAt = System.currentTimeMillis(),
+                receivedVia = "FCM",
+                localReceivedAt = now,
+                deviceReceivedAt = now,
             )
         }
 
