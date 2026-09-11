@@ -4,6 +4,8 @@ import android.app.NotificationManager
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +68,7 @@ enum class DeliveryState(val userText: String) {
     ),
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MyPushScreen(showSnackbar: (String) -> Unit) {
     val context = LocalContext.current
@@ -109,7 +112,7 @@ fun MyPushScreen(showSnackbar: (String) -> Unit) {
                         fontFamily = FontFamily.Monospace,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalButton(onClick = {
                         clipboard(context, installState.endpoint ?: "")
                         showSnackbar("Endpoint copied")
@@ -234,7 +237,7 @@ fun MyPushScreen(showSnackbar: (String) -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalButton(onClick = {
                         val curl = InstallationRepository.buildCurl()
                         if (curl !== null) {

@@ -9,14 +9,14 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Transaction
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Durable Android inbox (MVP-001D).
+ * Durable Android inbox (MVP-001D/002A).
  *
  * D1 is the canonical message store; this table is the local replica.
  * message_id is the canonical dedupe identity: FCM and SYNC may deliver the
@@ -57,11 +57,6 @@ data class SyncState(
 @Dao
 abstract class InboxDao {
 
-    /**
-     * Content upsert that PRESERVES local metadata on conflict:
-     * received_via/local_received_at keep the first arrival; is_read/read_at
-     * are never overwritten by a later FCM or sync.
-     */
     /**
      * SYNC upsert: content refresh that PRESERVES local metadata and any FCM
      * delivery evidence (device_received_at) — sync never overwrites them.
@@ -168,7 +163,7 @@ abstract class InboxDao {
 
 @Database(
     entities = [InboxMessage::class, SyncState::class],
-    version = 1,
+    version = 3,
     exportSchema = false,
 )
 abstract class InboxDatabase : RoomDatabase() {
@@ -178,13 +173,34 @@ abstract class InboxDatabase : RoomDatabase() {
         @Volatile
         private var instance: InboxDatabase? = null
 
+        /** MVP-001D (v1) → MVP-002A (v2): delivery evidence column. */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE inbox_messages ADD COLUMN device_received_at INTEGER")
+            }
+        }
+
+        /**
+         * v2 → v3: re-baselines the Room identity hash after a transient dev
+         * build wrote the database at version 2 with a drifted schema shape
+         * (same entities). No data changes; the user's inbox is preserved.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // no-op: identity re-baseline only
+            }
+        }
+
         fun get(context: Context): InboxDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     InboxDatabase::class.java,
                     "pigeonhub_inbox.db",
-                ).build().also { instance = it }
+                )
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .build()
+                    .also { instance = it }
             }
     }
 }
