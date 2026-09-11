@@ -20,14 +20,14 @@ runs in mock mode). The client pipeline is also fully exercisable locally
 | Path | What it is |
 | --- | --- |
 | `android/` | Android app (Kotlin, Jetpack Compose, Material 3, FCM) |
-| `worker/` | **Production transport**: Cloudflare Worker → OAuth2 (RS256 JWT) → FCM HTTP v1 (Workers **Free** plan) |
+| `worker/` | **Production transport**: Cloudflare Worker → D1 durable accept (idempotency, quota, seq) → OAuth2 (RS256 JWT) → FCM HTTP v1 (Workers/D1 **Free** plan) |
 | `server/` | Local dev sender (Fastify + firebase-admin) — kept as a regression/reference tool |
 | `docs/` | Setup guides, payload contract, session reports |
 
 > **Backend direction (decided):** production is **Cloudflare Workers + D1 + FCM**.
-> The Worker transport gate is verified (see
-> [docs/mvp-001a-worker-fcm-report.md](docs/mvp-001a-worker-fcm-report.md));
-> D1 durable message core (MVP-001B) is next.
+> Durable accept is live (`stored: true` ⇒ the message is in D1 before FCM runs;
+> idempotency + per-channel quota + pending-state recovery queries verified —
+> see [docs/mvp-001b-d1-durable-core-report.md](docs/mvp-001b-d1-durable-core-report.md)).
 
 ### Worker quick start
 

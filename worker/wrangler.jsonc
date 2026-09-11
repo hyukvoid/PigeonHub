@@ -1,16 +1,46 @@
-// PigeonHub push transport worker (MVP-001A). Free plan only — no paid
-// features, no D1, no queues. Secrets are NOT in this file: they are set via
-// `.dev.vars` (local, gitignored) or `wrangler secret put` (deployed).
+// PigeonHub push transport worker (MVP-001B). Free plan only — Workers + D1.
+// Secrets are NOT in this file: they live in `.dev.vars` (local, gitignored)
+// or Wrangler secrets (deployed). D1 stores messages/quota only — never keys.
 {
   "name": "pigeonhub-push",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "vars": {
-    // Not a secret: appears in the FCM HTTP v1 URL anyway.
-    "FIREBASE_PROJECT_ID": "pigeonhub-b958d"
+    // Not a secret: appears in the public FCM URL anyway.
+    "FIREBASE_PROJECT_ID": "pigeonhub-b958d",
+    // Development channel + free-tier protection quotas (per channel scope).
+    "CHANNEL_ID": "dev",
+    "QUOTA_DAILY_LIMIT": "50",
+    "QUOTA_MINUTE_LIMIT": "5"
   },
-  "observability": {
-    "enabled": true
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pigeonhub-messages",
+      "database_id": "5e44a7f0-a4de-4f8e-8929-1979a59cbadf"
+    }
+  ],
+  // Test environment: separate worker (pigeonhub-push-test) sharing the same D1,
+  // with failure injection enabled and tighter quotas so concurrency/429 paths
+  // can be exercised without touching production data or limits.
+  "env": {
+    "test": {
+      "name": "pigeonhub-push-test",
+      "vars": {
+        "FIREBASE_PROJECT_ID": "pigeonhub-b958d",
+        "CHANNEL_ID": "dev-test",
+        "QUOTA_DAILY_LIMIT": "300",
+        "QUOTA_MINUTE_LIMIT": "100",
+        "FAILURE_INJECTION": "on"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pigeonhub-messages",
+          "database_id": "5e44a7f0-a4de-4f8e-8929-1979a59cbadf"
+        }
+      ]
+    }
   }
 }

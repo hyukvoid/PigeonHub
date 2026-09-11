@@ -12,6 +12,15 @@ export interface Env {
   FCM_TEST_DEVICE_TOKEN: string;
   /** Development bearer secret guarding POST /push (distinct from future write tokens). */
   PUSH_BEARER_SECRET: string;
+
+  /** D1 binding: messages + quota_buckets (free plan). */
+  DB: D1Database;
+  /** Single development channel identifier until installations exist. */
+  CHANNEL_ID?: string;
+  QUOTA_DAILY_LIMIT?: string;
+  QUOTA_MINUTE_LIMIT?: string;
+  /** "on" only on the test worker — enables X-PigeonHub-Fail-At handling. */
+  FAILURE_INJECTION?: string;
 }
 
 export type Priority = "normal" | "high";
@@ -34,4 +43,26 @@ export interface ResolvedPush {
   sent_at: string;
   schema_version: "1";
   targetToken: string;
+}
+
+/** Stored message row (subset the API needs). */
+export interface StoredMessage {
+  id: string;
+  seq: number;
+  push_status: "pending" | "fcm_accepted" | "failed";
+  request_hash: string;
+  fcm_message_id: string | null;
+  last_error: string | null;
+}
+
+export type FailurePoint = "d1_pre" | "d1_post" | "fcm" | "status_update";
+
+export class PublishError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body?: Record<string, unknown>,
+  ) {
+    super(message);
+  }
 }
