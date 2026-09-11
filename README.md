@@ -19,13 +19,38 @@ runs in mock mode). The client pipeline is also fully exercisable locally
 
 | Path | What it is |
 | --- | --- |
-| `android/` | Android app (Kotlin, Jetpack Compose, Material 3, FCM-ready) |
-| `server/` | **Disposable** local dev sender (Node.js + TypeScript + Fastify + firebase-admin) |
+| `android/` | Android app (Kotlin, Jetpack Compose, Material 3, FCM) |
+| `worker/` | **Production transport**: Cloudflare Worker → OAuth2 (RS256 JWT) → FCM HTTP v1 (Workers **Free** plan) |
+| `server/` | Local dev sender (Fastify + firebase-admin) — kept as a regression/reference tool |
 | `docs/` | Setup guides, payload contract, session reports |
 
-> **Backend direction (decided):** production will be **Cloudflare Workers + D1 + FCM**.
-> The Fastify sender exists only to validate FCM delivery locally and will be
-> thrown away — do not add auth, queues, databases or deployment logic to it.
+> **Backend direction (decided):** production is **Cloudflare Workers + D1 + FCM**.
+> The Worker transport gate is verified (see
+> [docs/mvp-001a-worker-fcm-report.md](docs/mvp-001a-worker-fcm-report.md));
+> D1 durable message core (MVP-001B) is next.
+
+### Worker quick start
+
+```bash
+cd worker
+npm install
+npx wrangler secret put FIREBASE_CLIENT_EMAIL     # service account client_email
+npx wrangler secret put FIREBASE_PRIVATE_KEY      # PEM or base64(PEM)
+npx wrangler secret put FCM_TEST_DEVICE_TOKEN     # from the app Device tab
+npx wrangler secret put PUSH_BEARER_SECRET        # any random dev bearer
+npx wrangler deploy                               # https://<name>.<subdomain>.workers.dev
+```
+
+```bash
+curl -X POST https://pigeonhub-push.pigeonhub.workers.dev/push \
+  -H "Authorization: Bearer $PUSH_BEARER_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Build Complete","message":"Deployment succeeded","priority":"high","url":"https://example.com"}'
+```
+
+Local development: put the same four values in `worker/.dev.vars`
+(gitignored) and run `npx wrangler dev`. Responses carry a non-secret
+`X-PigeonHub-Auth: fresh|cache` header for cold/warm OAuth observation.
 
 ## Android app
 

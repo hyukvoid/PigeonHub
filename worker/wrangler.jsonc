@@ -1,0 +1,16 @@
+// PigeonHub push transport worker (MVP-001A). Free plan only — no paid
+// features, no D1, no queues. Secrets are NOT in this file: they are set via
+// `.dev.vars` (local, gitignored) or `wrangler secret put` (deployed).
+{
+  "name": "pigeonhub-push",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "vars": {
+    // Not a secret: appears in the FCM HTTP v1 URL anyway.
+    "FIREBASE_PROJECT_ID": "pigeonhub-b958d"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
