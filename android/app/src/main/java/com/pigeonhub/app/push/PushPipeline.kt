@@ -3,16 +3,16 @@ package com.pigeonhub.app.push
 import android.content.Context
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
+import com.pigeonhub.app.data.InboxDatabase
+import com.pigeonhub.app.data.InboxMessage
 
 /**
- * Single entry point for an incoming push, whichever transport delivered it
- * (FCM service today; adb debug receiver and in-app test buttons for local
- * testing). Order is fixed by the night-001 spec:
+ * Single entry point for a realtime push (FCM service, adb debug receiver,
+ * in-app test buttons). MVP-001D: the durable Room inbox IS the inbox state.
  *
- *   payload validation -> message_id dedupe -> inbox record -> notification
- *
- * The function never throws and never performs network I/O, so it is safe to
- * call from FirebaseMessagingService.onMessageReceived.
+ * Order per spec: payload validation → dedupe/upsert → Room → notification.
+ * The notification is posted only when the message is NEW to Room; a delayed
+ * or duplicated FCM after a sync never re-notifies (Room count stays 1).
  */
 object PushPipeline {
 
@@ -38,23 +38,42 @@ object PushPipeline {
             is PushPayloadValidator.ParseResult.Valid -> parsed.payload
         }
 
-        // Swap point for Room-based dedupe in MVP-001: everything downstream
-        // only knows the MessageDeduper interface.
-        val deduper: MessageDeduper = SharedPreferencesMessageDeduper(appContext)
-        if (deduper.isDuplicate(payload.messageId)) {
-            Log.i(TAG, "[$source] duplicate push suppressed: ${payload.messageId}")
+        // Durable upsert: message_id is the canonical dedupe identity. A
+        // repeated or delayed delivery updates content but never creates a
+        // second row (Room UNIQUE(message_id) + preserving upsert).
+        val db = InboxDatabase.get(appContext)
+        val dao = db.inboxDao()
+        val existing = dao.byId(payload.messageId)
+        val receivedVia = if (source == "fcm") "FCM" else "FCM"
+
+        db.runInTransaction {
+            dao.insertPreservingLocal(
+                messageId = payload.messageId,
+                channelId = payload.channelId ?: "dev",
+                seq = payload.seq ?: 0,
+                title = payload.title,
+                message = payload.message,
+                priority = payload.priority.name.lowercase(),
+                url = payload.url,
+                createdAt = payload.sentAt ?: "",
+                expiresAt = "",
+                receivedVia = receivedVia,
+                localReceivedAt = System.currentTimeMillis(),
+            )
+        }
+
+        if (existing !== null) {
+            Log.i(TAG, "[$source] duplicate delivery absorbed by Room: ${payload.messageId}")
             return HandleResult.Duplicate
         }
 
-        deduper.record(payload.messageId)
-        InboxStore.add(payload, source)
+        parsed.warnings.forEach { Log.w(TAG, "[$source] payload warning: $it") }
 
         if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) {
-            Log.w(TAG, "[$source] notifications disabled; kept in inbox only")
+            Log.w(TAG, "[$source] notifications disabled; message kept in Room only")
             return HandleResult.NotRendered("notification permission not granted")
         }
 
-        parsed.warnings.forEach { Log.w(TAG, "[$source] payload warning: $it") }
         val notificationId = NotificationRenderer.render(appContext, payload)
         Log.i(TAG, "[$source] delivered push ${payload.messageId} (priority=${payload.priority.name})")
         return HandleResult.Delivered(notificationId, parsed.warnings)

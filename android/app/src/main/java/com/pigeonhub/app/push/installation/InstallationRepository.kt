@@ -16,7 +16,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import androidx.room.withTransaction
 import kotlinx.coroutines.withContext
+import com.pigeonhub.app.data.InboxDatabase
+import com.pigeonhub.app.data.InboxMessage
 import org.json.JSONObject
 
 private const val WORKER_ORIGIN = "https://pigeonhub-push.pigeonhub.workers.dev"
@@ -74,6 +77,11 @@ object InstallationRepository {
             restore(context)
             ensureLocalCredentials(context)
             resumeIfRegistering(context)
+            // Cold-start sync trigger (MVP-001D). Foreground + manual refresh
+            // triggers live in the UI; polling is deliberately not used.
+            if (mutableState.value.status == BootstrapStatus.REGISTERED) {
+                syncInbox(context)
+            }
         }
     }
 
@@ -311,6 +319,96 @@ object InstallationRepository {
             "  -H \"Authorization: Bearer ${credentials?.writeToken}\" \\\n" +
             "  -H \"Content-Type: application/json\" \\\n" +
             "  -d '{\"title\":\"$title\",\"message\":\"$message\",\"priority\":\"high\"}'"
+    }
+
+    data class SyncSummary(val pages: Int, val recovered: Int, val truncated: Boolean, val error: String?)
+    data class InboxSyncUiState(val busy: Boolean = false, val lastSummary: SyncSummary? = null)
+
+    private val _inboxSyncState = MutableStateFlow(InboxSyncUiState())
+    val inboxSyncState: StateFlow<InboxSyncUiState> = _inboxSyncState.asStateFlow()
+
+    /**
+     * Sequence-based incremental sync (MVP-001D). Each page: fetch → validate →
+     * ONE Room transaction (upsert page + advance cursor). A crash mid-page
+     * rolls both back, so the cursor never skips uncommitted messages.
+     * GET is read-only on the server; local is_read state is never overwritten.
+     */
+    suspend fun syncInbox(context: Context): SyncSummary {
+        _inboxSyncState.value = _inboxSyncState.value.copy(busy = true)
+        val summary = try {
+            syncInboxLocked(context)
+        } catch (t: Throwable) {
+            Log.w(TAG, "inbox sync threw: ${t.message}")
+            SyncSummary(0, 0, false, t.message ?: "sync error")
+        }
+        _inboxSyncState.value = InboxSyncUiState(busy = false, lastSummary = summary)
+        return summary
+    }
+
+    private suspend fun syncInboxLocked(context: Context): SyncSummary = mutex.withLock {
+        val state = mutableState.value
+        val credentials = currentCredentials
+        val channelId = state.channelId
+        if (state.status != BootstrapStatus.REGISTERED || credentials === null || channelId === null) {
+            return@withLock SyncSummary(0, 0, false, "not registered")
+        }
+        val db = InboxDatabase.get(context)
+        val dao = db.inboxDao()
+        var after = dao.lastSyncedSeq() ?: 0
+        var snapshot: Int? = null
+        var hasMore = true
+        var pages = 0
+        var recovered = 0
+        var truncated = false
+        var error: String? = null
+
+        while (hasMore) {
+            val url = buildString {
+                append("$WORKER_ORIGIN/v1/installations/me/messages?after_seq=$after&limit=50")
+                snapshot?.let { append("&snapshot_max_seq=$it") }
+            }
+            val response = withContext(Dispatchers.IO) {
+                WorkerApi.request(method = "GET", url = url, bearer = credentials.managementSecret)
+            }
+            if (response.code != 200) {
+                error = "HTTP ${response.code}"
+                break
+            }
+            val json = JSONObject(response.body)
+            if (snapshot === null) snapshot = json.optInt("snapshot_max_seq", 0)
+            val arr = json.optJSONArray("messages") ?: org.json.JSONArray()
+            val now = System.currentTimeMillis()
+            val page = (0 until arr.length()).map { i ->
+                val m = arr.getJSONObject(i)
+                InboxMessage(
+                    message_id = m.getString("id"),
+                    channel_id = channelId,
+                    seq = m.getInt("seq"),
+                    title = m.getString("title"),
+                    message = m.getString("message"),
+                    priority = m.optString("priority", "normal"),
+                    url = m.optString("url").ifEmpty { null },
+                    created_at = m.optString("created_at"),
+                    expires_at = m.optString("expires_at"),
+                    received_via = "SYNC",
+                    local_received_at = now,
+                )
+            }
+            val next = json.optInt("next_after_seq", after)
+            truncated = truncated || json.optBoolean("history_truncated", false)
+            // CURSOR_TRANSACTION: page upserts + cursor advance commit together.
+            db.withTransaction { dao.commitPage(page, next, truncated) }
+            recovered += page.size
+            after = next
+            pages++
+            hasMore = json.optBoolean("has_more", false)
+        }
+        if (error === null) {
+            Log.i(TAG, "inbox sync complete: pages=$pages recovered=$recovered truncated=$truncated")
+        } else {
+            Log.w(TAG, "inbox sync failed: $error (cursor unchanged)")
+        }
+        return@withLock SyncSummary(pages, recovered, truncated, error)
     }
 
     fun onNewToken(context: Context, token: String) {

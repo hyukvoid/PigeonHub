@@ -27,6 +27,8 @@ export async function sendToFcm(
   },
   push: ResolvedPush,
   targetToken: string,
+  channelId: string,
+  seq: number,
 ): Promise<FcmSendResult> {
   let accessToken: string;
   let authSource: "cache" | "fresh";
@@ -57,6 +59,8 @@ export async function sendToFcm(
             token: targetToken,
             data: {
               message_id: push.message_id,
+              channel_id: channelId,
+              seq: String(seq),
               title: push.title,
               message: push.message,
               priority: push.priority,

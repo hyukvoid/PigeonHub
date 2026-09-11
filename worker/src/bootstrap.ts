@@ -130,6 +130,7 @@ export interface ChannelRow {
   installation_id: string;
   write_token_hash: string;
   write_token_version: number;
+  retention_floor_seq: number;
 }
 
 export async function getInstallationByBootstrap(
@@ -173,7 +174,7 @@ export async function getChannelByInstallation(
   installationId: string,
 ): Promise<ChannelRow | null> {
   return env.DB.prepare(
-    `SELECT id, installation_id, write_token_hash, write_token_version
+    `SELECT id, installation_id, write_token_hash, write_token_version, retention_floor_seq
      FROM channels WHERE installation_id = ?1`,
   )
     .bind(installationId)
@@ -182,7 +183,7 @@ export async function getChannelByInstallation(
 
 export async function getChannelById(env: Env, channelId: string): Promise<ChannelRow | null> {
   return env.DB.prepare(
-    `SELECT id, installation_id, write_token_hash, write_token_version
+    `SELECT id, installation_id, write_token_hash, write_token_version, retention_floor_seq
      FROM channels WHERE id = ?1`,
   )
     .bind(channelId)

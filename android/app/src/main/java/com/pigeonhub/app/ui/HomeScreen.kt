@@ -15,25 +15,30 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,15 +48,25 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import android.text.format.DateUtils
-import com.pigeonhub.app.push.InboxStore
-import com.pigeonhub.app.push.NotificationChannels
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pigeonhub.app.data.InboxDatabase
+import com.pigeonhub.app.data.InboxMessage
 import com.pigeonhub.app.push.PushPayload
+import com.pigeonhub.app.push.installation.InstallationRepository
 
+/**
+ * Durable inbox (MVP-001D): the UI renders the Room table as a Flow — the
+ * network response is never the screen's source of truth. Offline, the last
+ * synced Room contents stay on screen.
+ */
 @Composable
 fun HomeScreen(tap: TapInfo?, showSnackbar: (String) -> Unit) {
     val context = LocalContext.current
-    val entries by InboxStore.entries.collectAsState()
+    val dao = InboxDatabase.get(context).inboxDao()
+    val entries by dao.flowAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val notificationsEnabled = rememberNotificationsEnabled()
+    val syncState by InstallationRepository.inboxSyncState.collectAsState()
+    val scope = rememberCoroutineScope()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -76,10 +91,23 @@ fun HomeScreen(tap: TapInfo?, showSnackbar: (String) -> Unit) {
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
-            if (entries.isNotEmpty()) {
-                IconButton(onClick = { InboxStore.clear() }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Clear inbox")
+            if (syncState.busy) {
+                CircularProgressIndicator(Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+            IconButton(onClick = {
+                scope.launch(Dispatchers.IO) {
+                    val summary = InstallationRepository.syncInbox(context)
+                    showSnackbar(
+                        when {
+                            summary.error !== null -> "sync failed: ${summary.error}"
+                            summary.truncated -> "synced: ${summary.recovered} recovered (older messages expired on server)"
+                            else -> "synced: ${summary.recovered} recovered"
+                        }
+                    )
                 }
+            }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh inbox")
             }
         }
 
@@ -88,7 +116,8 @@ fun HomeScreen(tap: TapInfo?, showSnackbar: (String) -> Unit) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Notifications are off", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Allow notifications so pushes from PigeonHub can reach you.",
+                        "Allow notifications so pushes from PigeonHub can reach you. " +
+                            "Missed pushes are still recovered into this inbox by sync.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(onClick = {
@@ -115,13 +144,16 @@ fun HomeScreen(tap: TapInfo?, showSnackbar: (String) -> Unit) {
                     )
                     Text("No notifications yet", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Pushes you receive will appear here.",
+                        "Pushes you receive will appear here and stay available in this inbox.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
                     TextButton(onClick = {
-                        showSnackbar(TestPushes.send(context, priority = "normal"))
+                        scope.launch(Dispatchers.IO) {
+                            val result = TestPushes.send(context, priority = "normal")
+                            showSnackbar(result)
+                        }
                     }) {
                         Text("Send a test push")
                     }
@@ -132,10 +164,10 @@ fun HomeScreen(tap: TapInfo?, showSnackbar: (String) -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                items(entries, key = { it.payload.messageId + it.receivedAtMillis }) { entry ->
+                items(entries, key = { it.message_id }) { entry ->
                     EntryCard(
                         entry = entry,
-                        highlighted = tap?.messageId == entry.payload.messageId,
+                        highlighted = tap?.messageId == entry.message_id,
                         showSnackbar = showSnackbar,
                     )
                 }
@@ -147,12 +179,11 @@ fun HomeScreen(tap: TapInfo?, showSnackbar: (String) -> Unit) {
 
 @Composable
 private fun EntryCard(
-    entry: InboxStore.Entry,
+    entry: InboxMessage,
     highlighted: Boolean,
     showSnackbar: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val payload = entry.payload
     val containerModifier = if (highlighted) {
         Modifier
             .fillMaxWidth()
@@ -167,37 +198,44 @@ private fun EntryCard(
                 AssistChip(
                     onClick = {},
                     label = {
-                        Text(if (payload.priority == PushPayload.Priority.HIGH) "HIGH" else "NORMAL")
+                        Text(if (entry.priority == PushPayload.Priority.HIGH.name) "HIGH" else "NORMAL")
                     },
                 )
+                if (!entry.is_read) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "new",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                if (entry.received_via == "SYNC") {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "recovered",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 Text(
-                    DateUtils.getRelativeTimeSpanString(entry.receivedAtMillis).toString(),
+                    DateUtils.getRelativeTimeSpanString(entry.local_received_at).toString(),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(
-                payload.title,
+                entry.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(payload.message, style = MaterialTheme.typography.bodyMedium)
-            payload.sentAt?.let {
-                Text(
-                    "sent_at: $it",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (highlighted) {
-                Text(
-                    "Opened from notification",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            payload.url?.let { url ->
+            Text(entry.message, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "seq ${entry.seq} · via ${entry.received_via}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            entry.url?.let { url ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Filled.OpenInNew,

@@ -65,9 +65,22 @@ object PushPayloadValidator {
 
         val sentAt = raw[PushPayload.KEY_SENT_AT]?.trim()?.take(MAX_SENT_AT_LENGTH)
 
+        // Canonical coordinates (MVP-001D). Optional: legacy senders omit them,
+        // in which case the row is stored without a seq coordinate.
+        val channelId = raw[PushPayload.KEY_CHANNEL_ID]?.trim()?.take(MAX_CHANNEL_ID_LENGTH)
+            ?.ifEmpty { null }
+        val seq = raw[PushPayload.KEY_SEQ]?.trim()?.take(MAX_SEQ_LENGTH)?.let {
+            it.toIntOrNull() ?: run {
+                warnings += "seq ignored: not a number"
+                null
+            }
+        }
+
         return ParseResult.Valid(
             payload = PushPayload(
                 messageId = messageId,
+                channelId = channelId,
+                seq = seq,
                 title = title,
                 message = message,
                 priority = priority,
@@ -116,6 +129,8 @@ object PushPayloadValidator {
         }
 
     private const val MAX_ID_LENGTH = 256
+    private const val MAX_CHANNEL_ID_LENGTH = 64
+    private const val MAX_SEQ_LENGTH = 12
     private const val MAX_TITLE_LENGTH = 500
     private const val MAX_MESSAGE_LENGTH = 4000
     private const val MAX_SENT_AT_LENGTH = 64

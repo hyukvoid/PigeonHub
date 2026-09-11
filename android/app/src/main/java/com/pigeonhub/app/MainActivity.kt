@@ -6,10 +6,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
-import com.pigeonhub.app.push.InboxStore
 import com.pigeonhub.app.push.NotificationChannels
 import com.pigeonhub.app.push.NotificationRenderer
+import com.pigeonhub.app.data.InboxDatabase
 import com.pigeonhub.app.push.installation.InstallationRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.pigeonhub.app.ui.PigeonHubApp
 import com.pigeonhub.app.ui.TapInfo
 import com.pigeonhub.app.ui.theme.PigeonHubTheme
@@ -17,6 +21,7 @@ import com.pigeonhub.app.ui.theme.PigeonHubTheme
 class MainActivity : ComponentActivity() {
 
     private val tap = mutableStateOf<TapInfo?>(null)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,7 +43,11 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         val messageId = intent?.getStringExtra(NotificationRenderer.EXTRA_MESSAGE_ID) ?: return
-        InboxStore.markTapped(messageId)
+        // The message is already durable (PushPipeline persists before notifying);
+        // a tap only flips the LOCAL unread bit.
+        appScope.launch {
+            InboxDatabase.get(applicationContext).inboxDao().markRead(messageId, System.currentTimeMillis())
+        }
         tap.value = TapInfo(
             messageId = messageId,
             url = intent.getStringExtra(NotificationRenderer.EXTRA_URL),

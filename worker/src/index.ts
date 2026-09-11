@@ -156,7 +156,7 @@ async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> 
   }
 
   // ---- FCM send ----
-  const sent = await sendToFcm(env, ctx.push, ctx.targetToken);
+  const sent = await sendToFcm(env, ctx.push, ctx.targetToken, ctx.channelId, seq);
 
   if (sent.ok) {
     // ---- (D) failure injection between FCM accept and state update ----
@@ -363,6 +363,76 @@ export default {
           );
         }
         return json({ fcm_token_version: expected + 1, updated: true });
+      });
+    }
+
+    if (url.pathname === "/v1/installations/me/messages" && request.method === "GET") {
+      return requireInstallation(request, env, async (installation) => {
+        const channel = await getChannelByInstallation(env, installation.id);
+        if (!channel) return json({ ok: false, error: "channel missing" }, 500);
+
+        const params = url.searchParams;
+        const limitRaw = Number(params.get("limit") ?? "50");
+        const limit = Math.min(Math.max(Number.isInteger(limitRaw) && limitRaw > 0 ? limitRaw : 50, 1), 200);
+        const afterRaw = Number(params.get("after_seq") ?? "0");
+        const afterSeq = Number.isFinite(afterRaw) && afterRaw >= 0 ? Math.floor(afterRaw) : 0;
+
+        // Snapshot pagination: the FIRST page fixes the upper seq bound so
+        // messages published mid-sync land in the NEXT sync (never duplicated
+        // or missed within one sync session).
+        const snapshotParam = params.get("snapshot_max_seq");
+        let snapshotMaxSeq: number;
+        if (snapshotParam !== null) {
+          const v = Number(snapshotParam);
+          if (!Number.isFinite(v) || v < 0) {
+            return json({ ok: false, error: "invalid snapshot_max_seq" }, 400);
+          }
+          snapshotMaxSeq = Math.floor(v);
+        } else {
+          const row = await env.DB.prepare(
+            `SELECT COALESCE(MAX(seq), 0) AS m FROM messages WHERE channel_id = ?1`,
+          )
+            .bind(channel.id)
+            .first<{ m: number }>();
+          snapshotMaxSeq = row?.m ?? 0;
+        }
+
+        // Read-only: GET never mutates message state (no read receipts here).
+        // Expired messages are excluded; physical deletion is MVP-001E.
+        const nowIso = new Date().toISOString();
+        const rows = await env.DB.prepare(
+          `SELECT id, seq, title, message, priority, url, created_at, expires_at
+           FROM messages
+           WHERE channel_id = ?1 AND seq > ?2 AND seq <= ?3 AND expires_at > ?4
+           ORDER BY seq ASC LIMIT ?5`,
+        )
+          .bind(channel.id, afterSeq, snapshotMaxSeq, nowIso, limit + 1)
+          .all<{
+            id: string;
+            seq: number;
+            title: string;
+            message: string;
+            priority: string;
+            url: string | null;
+            created_at: string;
+            expires_at: string;
+          }>();
+
+        const all = rows.results ?? [];
+        const hasMore = all.length > limit;
+        const page = hasMore ? all.slice(0, limit) : all;
+        const nextAfterSeq = page.length > 0 ? page[page.length - 1].seq : afterSeq;
+        const retentionFloor = channel.retention_floor_seq ?? 0;
+        const historyTruncated = afterSeq < retentionFloor;
+
+        return json({
+          messages: page,
+          next_after_seq: nextAfterSeq,
+          snapshot_max_seq: snapshotMaxSeq,
+          has_more: hasMore,
+          retention_floor_seq: retentionFloor,
+          history_truncated: historyTruncated,
+        });
       });
     }
 
