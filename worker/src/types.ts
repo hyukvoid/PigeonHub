@@ -28,6 +28,10 @@ export interface Env {
   INVITE_HASHES?: string;
   /** MVP-001C: base64 256-bit application key used to AES-GCM-encrypt FCM tokens at rest. */
   FCM_TOKEN_ENCRYPTION_KEY?: string;
+  /** MVP-001E: beta gate — bootstrap rejects fresh registrations at this installation count. */
+  BETA_MAX_INSTALLATIONS?: string;
+  /** MVP-001E: set to "on" (config/deploy) to globally disable publishing (free-tier kill switch). */
+  PUBLISH_KILL_SWITCH?: string;
 }
 
 export type Priority = "normal" | "high";

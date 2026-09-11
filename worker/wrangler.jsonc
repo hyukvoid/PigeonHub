@@ -13,7 +13,15 @@
     "CHANNEL_ID": "dev",
     "QUOTA_DAILY_LIMIT": "50",
     "QUOTA_MINUTE_LIMIT": "5",
-    "GLOBAL_DAILY_LIMIT": "1000"
+    "GLOBAL_DAILY_LIMIT": "1000",
+    // Beta gate: maximum registered installations (bootstrap rejects beyond this).
+    "BETA_MAX_INSTALLATIONS": "20"
+    // Free-tier kill switch: set PUBLISH_KILL_SWITCH = "on" here (or as a secret)
+    // to globally disable publishing without touching code.
+  },
+  "triggers": {
+    // Bounded delivery recovery + retention cleanup (MVP-001E). Free plan crons.
+    "crons": ["*/15 * * * *"]
   },
   "d1_databases": [
     {

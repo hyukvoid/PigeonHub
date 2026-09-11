@@ -7,6 +7,7 @@ import {
   refundQuota,
   updatePushStatus,
 } from "./d1.js";
+import { runMaintenance, betaCapacityReached } from "./maintenance.js";
 import { sendToFcm } from "./fcm.js";
 import { validatePush } from "./validate.js";
 import type { Env, PushRequest, ResolvedPush } from "./types.js";
@@ -70,6 +71,13 @@ interface PublishContext {
 }
 
 async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> {
+  // ---- global free-tier kill switch (MVP-001E) ----
+  if (env.PUBLISH_KILL_SWITCH === "on") {
+    return json(
+      { ok: false, stored: false, error: "publishing temporarily disabled" },
+      503,
+    );
+  }
   // ---- (A) failure injection BEFORE anything durable/external ----
   if (ctx.failAt === "d1_pre") {
     return json({ ok: false, stored: false, injected: "d1_pre" }, 500);
@@ -234,6 +242,17 @@ function stringField(body: Record<string, unknown>, key: string): string {
 }
 
 export default {
+  async scheduled(_controller: unknown, env: Env): Promise<void> {
+    // Bounded delivery recovery + retention cleanup (MVP-001E).
+    const summary = await runMaintenance(env);
+    console.log(
+      `[maintenance] retried=${summary.retried} accepted=${summary.retryAccepted} ` +
+        `still_pending=${summary.retryStillPending} permanent_failed=${summary.retryFailedPermanent} ` +
+        `self_healed=${summary.selfHealedScenarioD} ceiling_hit=${summary.retryCeilingHit} ` +
+        `expired_deleted=${summary.expiredDeleted}`,
+    );
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
@@ -245,7 +264,18 @@ export default {
         durable: env.DB !== undefined,
         bootstrap: Boolean(env.INVITE_HASHES && env.FCM_TOKEN_ENCRYPTION_KEY),
         injection: env.FAILURE_INJECTION === "on",
+        publish_disabled: env.PUBLISH_KILL_SWITCH === "on",
       });
+    }
+
+    if (url.pathname === "/v1/maintenance/run" && request.method === "POST") {
+      // Operational trigger for the bounded recovery/cleanup jobs (the Cron
+      // schedule runs the same function). Bearer-gated by the dev secret.
+      if (!env.PUSH_BEARER_SECRET || !bearerMatches(request, env.PUSH_BEARER_SECRET)) {
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+      const summary = await runMaintenance(env);
+      return json({ ok: true, maintenance: summary });
     }
 
     // =====================================================================
@@ -632,6 +662,9 @@ async function handleBootstrap(request: Request, env: Env): Promise<Response> {
   const inviteHash = await resolveInvite(env, inviteCode);
   if (inviteHash === null) {
     return json({ ok: false, error: "invalid invite code" }, 403);
+  }
+  if (await betaCapacityReached(env)) {
+    return json({ ok: false, error: "beta capacity reached" }, 403);
   }
 
   const outcome = await createInstallationWithChannel(env, {
