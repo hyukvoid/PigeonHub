@@ -1,0 +1,29 @@
+name: PigeonHub notify
+
+# PigeonHub integration example (MVP-002A): a real external automation that
+# turns repo events into a phone notification via the private channel API.
+# - Workflow failures of THIS step must never break the underlying CI job.
+# - Credentials come from repository secrets; no literal values allowed here.
+# - Trigger is scoped to workflow_dispatch + pushes to main only, so phase
+#   commits on feature work do not spam the device.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send PigeonHub notification
+        env:
+          PIGEONHUB_ENDPOINT: ${{ secrets.PIGEONHUB_ENDPOINT }}
+          PIGEONHUB_TOKEN: ${{ secrets.PIGEONHUB_TOKEN }}
+        run: |
+          curl -sS --max-time 20 -X POST "$PIGEONHUB_ENDPOINT" \
+            -H "Authorization: Bearer $PIGEONHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"title\":\"GitHub Actions\",\"message\":\"Push to main processed by PigeonHub notify workflow.\",\"priority\":\"normal\"}" \
+            || echo "::warning::PigeonHub notification could not be sent (non-fatal)"

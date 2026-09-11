@@ -63,3 +63,5 @@ worker/gen_*.cjs
 .vscode/
 .DS_Store
 Thumbs.db
+
+worker/.automation-credentials.json
