@@ -60,6 +60,11 @@ object PushPipeline {
                 receivedVia = "FCM",
                 localReceivedAt = now,
                 deviceReceivedAt = now,
+                eventType = data["event_type"],
+                provider = data["provider"],
+                runId = data["run_id"],
+                attentionReason = data["attention_reason"],
+                factsJson = data["facts"],
             )
         }
 

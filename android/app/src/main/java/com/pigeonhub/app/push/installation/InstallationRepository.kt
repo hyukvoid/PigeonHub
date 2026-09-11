@@ -398,6 +398,11 @@ object InstallationRepository {
                     expires_at = m.optString("expires_at"),
                     received_via = "SYNC",
                     local_received_at = now,
+                    event_type = m.optString("event_type").ifEmpty { null },
+                    provider = m.optString("provider").ifEmpty { null },
+                    run_id = m.optString("run_id").ifEmpty { null },
+                    attention_reason = m.optString("attention_reason").ifEmpty { null },
+                    facts_json = m.optString("facts_json").ifEmpty { null },
                 )
             }
             val next = json.optInt("next_after_seq", after)

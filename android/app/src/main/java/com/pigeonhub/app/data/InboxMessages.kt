@@ -41,6 +41,12 @@ data class InboxMessage(
     val local_received_at: Long,
     /** Set when the app's own FCM callback received this message (MVP-002A). */
     val device_received_at: Long? = null,
+    /** Agent event metadata (MVP-003A). Null for generic automation messages. */
+    val event_type: String? = null,
+    val provider: String? = null,
+    val run_id: String? = null,
+    val attention_reason: String? = null,
+    val facts_json: String? = null,
     /** Local-only unread state; server sync never overwrites it. */
     val is_read: Boolean = false,
     val read_at: Long? = null,
@@ -64,9 +70,11 @@ abstract class InboxDao {
     @Query(
         "INSERT INTO inbox_messages " +
             "(message_id, channel_id, seq, title, message, priority, url, " +
-            "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at) " +
+            "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at, " +
+            "event_type, provider, run_id, attention_reason, facts_json) " +
             "VALUES (:messageId, :channelId, :seq, :title, :message, :priority, :url, " +
-            ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, NULL, 0, NULL) " +
+            ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, NULL, 0, NULL, " +
+            ":eventType, :provider, :runId, :attentionReason, :factsJson) " +
             "ON CONFLICT(message_id) DO UPDATE SET " +
             "title = excluded.title, message = excluded.message, priority = excluded.priority, " +
             "url = excluded.url, expires_at = excluded.expires_at",
@@ -83,6 +91,11 @@ abstract class InboxDao {
         expiresAt: String,
         receivedVia: String,
         localReceivedAt: Long,
+        eventType: String?,
+        provider: String?,
+        runId: String?,
+        attentionReason: String?,
+        factsJson: String?,
     )
 
     /**
@@ -93,9 +106,11 @@ abstract class InboxDao {
     @Query(
         "INSERT INTO inbox_messages " +
             "(message_id, channel_id, seq, title, message, priority, url, " +
-            "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at) " +
+            "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at, " +
+            "event_type, provider, run_id, attention_reason, facts_json) " +
             "VALUES (:messageId, :channelId, :seq, :title, :message, :priority, :url, " +
-            ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, :deviceReceivedAt, 0, NULL) " +
+            ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, :deviceReceivedAt, 0, NULL, " +
+            ":eventType, :provider, :runId, :attentionReason, :factsJson) " +
             "ON CONFLICT(message_id) DO UPDATE SET " +
             "title = excluded.title, message = excluded.message, priority = excluded.priority, " +
             "url = excluded.url, expires_at = excluded.expires_at, " +
@@ -114,6 +129,11 @@ abstract class InboxDao {
         receivedVia: String,
         localReceivedAt: Long,
         deviceReceivedAt: Long,
+        eventType: String?,
+        provider: String?,
+        runId: String?,
+        attentionReason: String?,
+        factsJson: String?,
     )
 
     @Query("SELECT * FROM inbox_messages WHERE message_id = :messageId")
@@ -154,6 +174,7 @@ abstract class InboxDao {
             insertFromSync(
                 m.message_id, m.channel_id, m.seq, m.title, m.message, m.priority,
                 m.url, m.created_at, m.expires_at, "SYNC", now,
+                m.event_type, m.provider, m.run_id, m.attention_reason, m.facts_json,
             )
         }
         setSyncState(SyncState(id = 1, last_synced_seq = cursor, last_sync_at = now))
@@ -163,7 +184,7 @@ abstract class InboxDao {
 
 @Database(
     entities = [InboxMessage::class, SyncState::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class InboxDatabase : RoomDatabase() {
@@ -191,6 +212,17 @@ abstract class InboxDatabase : RoomDatabase() {
             }
         }
 
+        /** MVP-003A (v3) → v4: agent event metadata columns. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE inbox_messages ADD COLUMN event_type TEXT")
+                db.execSQL("ALTER TABLE inbox_messages ADD COLUMN provider TEXT")
+                db.execSQL("ALTER TABLE inbox_messages ADD COLUMN run_id TEXT")
+                db.execSQL("ALTER TABLE inbox_messages ADD COLUMN attention_reason TEXT")
+                db.execSQL("ALTER TABLE inbox_messages ADD COLUMN facts_json TEXT")
+            }
+        }
+
         fun get(context: Context): InboxDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -198,7 +230,7 @@ abstract class InboxDatabase : RoomDatabase() {
                     InboxDatabase::class.java,
                     "pigeonhub_inbox.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

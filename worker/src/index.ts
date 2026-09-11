@@ -9,6 +9,7 @@ import {
 } from "./d1.js";
 import { runMaintenance, betaCapacityReached } from "./maintenance.js";
 import { sendToFcm } from "./fcm.js";
+import { validateAgentEvent, type ValidatedAgentEvent } from "./agent_event.js";
 import { validatePush } from "./validate.js";
 import type { Env, PushRequest, ResolvedPush } from "./types.js";
 import {
@@ -68,6 +69,7 @@ interface PublishContext {
   requestHash: string;
   idempotencyKey: string | null;
   failAt: string | null;
+  agent?: ValidatedAgentEvent | null;
 }
 
 async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> {
@@ -105,7 +107,7 @@ async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> 
   // ---- D1 insert (pending) ----
   let seq: number;
   try {
-    seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey);
+    seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey, ctx.agent);
   } catch (error) {
     if (error instanceof D1UniqueRace) {
       if (error.indexName === "channel_idem" && ctx.idempotencyKey !== null) {
@@ -117,7 +119,7 @@ async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> 
       }
       // seq allocation raced (should be impossible: D1 serializes writes);
       // retry once with the unique index as the final backstop.
-      seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey);
+      seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey, ctx.agent);
     } else {
       // Genuine D1 failure: nothing stored, so FCM must never run.
       return json(
@@ -431,7 +433,8 @@ export default {
         // Expired messages are excluded; physical deletion is MVP-001E.
         const nowIso = new Date().toISOString();
         const rows = await env.DB.prepare(
-          `SELECT id, seq, title, message, priority, url, created_at, expires_at
+          `SELECT id, seq, title, message, priority, url, created_at, expires_at,
+                  event_type, provider, run_id, attention_reason, facts_json
            FROM messages
            WHERE channel_id = ?1 AND seq > ?2 AND seq <= ?3 AND expires_at > ?4
            ORDER BY seq ASC LIMIT ?5`,
@@ -552,6 +555,13 @@ export default {
         return json({ ok: false, stored: false, error: "token decryption failed" }, 500);
       }
 
+      let agent: ValidatedAgentEvent | null = null;
+      if (body.agent_event !== undefined) {
+        const result = validateAgentEvent(body.agent_event);
+        if (!result.ok) return json({ ok: false, errors: result.errors }, 400);
+        agent = result.event;
+      }
+
       return durablePublish(env, {
         channelId: channel.id,
         quotaScope: `inst:${installation.id}`,
@@ -565,6 +575,7 @@ export default {
         ),
         idempotencyKey,
         failAt,
+        agent,
       });
     }
 

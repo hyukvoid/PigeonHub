@@ -152,6 +152,15 @@ function classifyUniqueRace(text: string): "idem" | "seq" | null {
   return null;
 }
 
+export interface AgentMeta {
+  eventType: string;
+  provider: string;
+  runId: string;
+  eventId: string;
+  attentionReason: string | null;
+  factsJson: string | null;
+}
+
 /** Insert as `pending`. seq = channel MAX(seq)+1 allocated inside the statement. */
 export async function insertPendingMessage(
   env: Env,
@@ -159,6 +168,7 @@ export async function insertPendingMessage(
   push: ResolvedPush,
   requestHash: string,
   idempotencyKey: string | null,
+  agent?: AgentMeta | null,
 ): Promise<number> {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MESSAGES_TTL_DAYS * 86_400_000).toISOString();
@@ -167,10 +177,11 @@ export async function insertPendingMessage(
     await env.DB.prepare(
       `INSERT INTO messages
          (id, channel_id, seq, title, message, priority, url,
-          created_at, expires_at, idempotency_key, request_hash, push_status, attempt_count)
+          created_at, expires_at, idempotency_key, request_hash, push_status, attempt_count,
+          event_type, provider, run_id, event_id, attention_reason, facts_json)
        SELECT ?1, ?2,
               COALESCE((SELECT MAX(seq) FROM messages WHERE channel_id = ?2), 0) + 1,
-              ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0`,
+              ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0, ?11, ?12, ?13, ?14, ?15, ?16`,
     )
       .bind(
         id,
@@ -183,6 +194,24 @@ export async function insertPendingMessage(
         expiresAt,
         idempotencyKey,
         requestHash,
+      )
+.bind(
+        id,
+        channelId,
+        push.title,
+        push.message,
+        push.priority,
+        push.url ?? null,
+        now.toISOString(),
+        expiresAt,
+        idempotencyKey,
+        requestHash,
+        agent?.eventType ?? null,
+        agent?.provider ?? null,
+        agent?.runId ?? null,
+        agent?.eventId ?? null,
+        agent?.attentionReason ?? null,
+        agent?.factsJson ?? null,
       )
       .run();
   } catch (error) {
