@@ -50,7 +50,7 @@ function newIdentity(tag) {
     writeToken: randomBytes(32).toString("base64url"),
   };
 }
-const invite = (n) => devVar(`INVITE_CODE_${n}`);
+const invite = (n) => devVar(`TEST_INVITE_CODE_${n}`);
 const REAL_DEVICE_TOKEN = devVar("FCM_DEVICE_TOKEN");
 
 // ---------- Test A: response loss x20 (identical bootstrap re-sent) ----------

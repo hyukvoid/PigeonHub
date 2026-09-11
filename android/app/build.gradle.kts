@@ -25,6 +25,10 @@ android {
 
     buildTypes {
         release {
+            // Local validation builds are signed with the debug key so the
+            // release artifact can be installed on test devices. Store/public
+            // release signing remains a separate, owner-held step.
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

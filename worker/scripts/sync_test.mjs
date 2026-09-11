@@ -1,6 +1,6 @@
 /**
  * MVP-001D sync API protocol tests. Run: node scripts/sync_test.mjs <base-url>
- * Consumes two fresh invite codes (INVITE_CODE_1, INVITE_CODE_2).
+ * Consumes two fresh invite codes (TEST_INVITE_CODE_9, TEST_INVITE_CODE_10).
  * Publishes real FCM messages to REAL_DEVICE_TOKEN? No — uses fake tokens where
  * delivery doesn't matter (push_status=failed still persists canonically), and
  * the real device token only in the final delivery probe.
