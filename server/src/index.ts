@@ -1,5 +1,8 @@
 import { buildApp } from "./app.js";
 import { resolveTransport } from "./fcm.js";
+import { loadDotEnv } from "./dotenv.js";
+
+loadDotEnv();
 
 const port = Number(process.env.PORT ?? 8787);
 // HOST=0.0.0.0 if you must reach the sender from another machine on your LAN;
