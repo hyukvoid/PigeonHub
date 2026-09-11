@@ -51,7 +51,7 @@ pnpm-debug.log*
 
 .dev.vars
 .dev.vars.*
-worker/.wrangler/
+.wrangler/
 
 # ---- IDE / OS ----
 
