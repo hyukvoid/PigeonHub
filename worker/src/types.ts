@@ -34,6 +34,10 @@ export interface Env {
   BETA_MAX_INSTALLATIONS?: string;
   /** MVP-001E: set to "on" (config/deploy) to globally disable publishing (free-tier kill switch). */
   PUBLISH_KILL_SWITCH?: string;
+  /** MVP-003B: GitHub App URL slug for install/upgrade URLs. */
+  GITHUB_APP_SLUG?: string;
+  /** MVP-003B: GitHub webhook signature verification secret. */
+  GITHUB_WEBHOOK_SECRET?: string;
 }
 
 export type Priority = "normal" | "high";

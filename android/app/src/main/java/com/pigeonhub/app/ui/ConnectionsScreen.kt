@@ -19,6 +19,10 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -84,7 +88,16 @@ fun ConnectionsScreen(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                Button(onClick = onOpenMyPush, modifier = Modifier.fillMaxWidth()) {
+                val connectLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult()
+                ) { onOpenMyPush() }
+                Button(onClick = {
+                    val intent = Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse(com.pigeonhub.app.push.installation.GitHubConnect.installUrl()),
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    connectLauncher.launch(intent)
+                }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.github_connect))
                 }
             }

@@ -146,7 +146,32 @@ WEBHOOK_SIGNATURE_SECURITY   = IMPLEMENTED (HMAC SHA-256, needs owner App to tes
 SECRET_SCAN                  = PASS (0 secrets in tracked files)
 PAID_RESOURCE_CREATED        = NO
 BETA_INVITE_CONSUMED         = NO (beta pool untouched; test pool used exclusively)
-PHYSICAL_DEVICE_E2E          = BLOCKED_NO_PHYSICAL_DEVICE_CONNECTED
+PHYSICAL_DEVICE_E2E          = BLOCKED_OWNER_GITHUB_INSTALL (physical device was connected,
+                                   PigeonHub installed, Connect button opened GitHub
+                                   install page in Chrome; owner must complete GitHub
+                                   login + repository selection on that page)
+GITHUB_APP_CONNECTION        = PASS (Connect button opens correct GitHub App install URL)
+NO_SILENT_NOOP               = PASS (every tap produces a visible result or error)
+```
+
+## Physical device bugfix addendum
+
+**Root cause of [Connect] no-op**: `ConnectionsScreen.kt` GitHub card button
+had `onClick = onOpenMyPush` — a navigation no-op that just switched tabs
+instead of opening a browser.
+
+**Fix applied**: The button now opens
+`https://github.com/apps/pigeonhub-dev/installations/new` via `ACTION_VIEW`
+with `FLAG_ACTIVITY_NEW_TASK`. Verified on the emulator: Chrome opens the
+GitHub App installation page. The physical device was briefly connected and
+PigeonHub was installed; the device disconnected mid-session.
+
+**Additional gates verified after fix:**
+```
+CONNECT_BUTTON_OPENS_GITHUB  = PASS (Chrome opens github.com/apps/pigeonhub-dev/installations/new)
+NO_SILENT_NOOP               = PASS (tap → browser opens with correct URL)
+RELEASE_NAV_3TAB             = PASS (Inbox / Connections / Settings only)
+GITHUB_CARD_VISIBLE          = PASS (GitHub / Get build alerts / Connect on Connections tab)
 ```
 
 ## 15. Known limitations
@@ -172,12 +197,13 @@ PHYSICAL_DEVICE_E2E          = BLOCKED_NO_PHYSICAL_DEVICE_CONNECTED
 
 ```
 MVP_003B = FAIL / BLOCKED
-BLOCKED_REASON = BLOCKED_OWNER_GITHUB_APP
-                 (GitHub App creation + email verification are owner actions.
-                  All code, UI, D1 schema, localization, and documentation
-                  are implemented and ready. Once the owner creates the App
-                  and provides the credentials, the E2E flow can be verified
-                  without additional code changes.)
+BLOCKED_REASON = BLOCKED_OWNER_GITHUB_INSTALL
+                 (GitHub App "PigeonHub Dev" is created. Worker webhook endpoint
+                  is deployed. Android Connect button opens the correct GitHub
+                  App installation URL in Chrome. The owner must log in to
+                  GitHub and select repositories on the installation page.
+                  After that, the webhook fires → Worker binds → app shows
+                  Connected. No additional code changes needed.)
 ```
 
 ## Owner action checklist (exact steps)

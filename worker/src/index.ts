@@ -8,6 +8,7 @@ import {
   updatePushStatus,
 } from "./d1.js";
 import { runMaintenance, betaCapacityReached } from "./maintenance.js";
+import { getInstallUrl, getGitHubConnectionStatus, bindGitHubInstallation } from "./github_connection.js";
 import { sendToFcm } from "./fcm.js";
 import { validateAgentEvent, type ValidatedAgentEvent } from "./agent_event.js";
 import { validatePush } from "./validate.js";
@@ -278,6 +279,53 @@ export default {
       }
       const summary = await runMaintenance(env);
       return json({ ok: true, maintenance: summary });
+    }
+
+    // =====================================================================
+    // MVP-003B — GitHub App connection
+    // =====================================================================
+    if (url.pathname === "/v1/github/install-url" && request.method === "GET") {
+      return requireInstallation(request, env, async (installation) => {
+        const installUrl = await getInstallUrl(env);
+        return json({ url: installUrl });
+      });
+    }
+
+    if (url.pathname === "/v1/github/status" && request.method === "GET") {
+      return requireInstallation(request, env, async (installation) => {
+        const status = await getGitHubConnectionStatus(env, installation.id);
+        return json({
+          connected: status.connected,
+          connected_at: status.connectedAt,
+        });
+      });
+    }
+
+    if (url.pathname === "/v1/webhooks/github" && request.method === "POST") {
+      // Verify webhook signature (HMAC SHA-256 with GITHUB_WEBHOOK_SECRET)
+      const signature = request.headers.get("X-Hub-Signature-256");
+      const secret = env.GITHUB_WEBHOOK_SECRET;
+      if (secret && signature) {
+        const body = await request.text();
+        const key = await crypto.subtle.importKey(
+          "raw", new TextEncoder().encode(secret),
+          { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+        );
+        const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+        const expected = "sha256=" + [...new Uint8Array(sig)]
+          .map((b) => b.toString(16).padStart(2, "0")).join("");
+        if (expected !== signature) {
+          return json({ ok: false, error: "invalid signature" }, 401);
+        }
+        // Re-create request body reader since we consumed it
+        const event = JSON.parse(body);
+        if (event.action === "created" && event.installation?.id) {
+          const bound = await bindGitHubInstallation(env, String(event.installation.id));
+          return json({ ok: true, bound });
+        }
+        return json({ ok: true });
+      }
+      return json({ ok: false, error: "webhook secret not configured" }, 500);
     }
 
     // =====================================================================
