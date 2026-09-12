@@ -20,6 +20,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.withContext
 import com.pigeonhub.app.data.InboxDatabase
 import com.pigeonhub.app.data.InboxMessage
+import com.pigeonhub.app.push.DevicePrefs
 import org.json.JSONObject
 
 private const val WORKER_ORIGIN = "https://pigeonhub-push.pigeonhub.workers.dev"
@@ -80,6 +81,12 @@ object InstallationRepository {
             // Cold-start sync trigger (MVP-001D). Foreground + manual refresh
             // triggers live in the UI; polling is deliberately not used.
             if (mutableState.value.status == BootstrapStatus.REGISTERED) {
+                // Refresh the FCM push token on the server (MVP-003B fix:
+                // stale FCM tokens caused 404 NotRegistered on webhook pushes).
+                val fcmToken = DevicePrefs.loadFcmToken(context)
+                if (!fcmToken.isNullOrEmpty()) {
+                    updatePushToken(context, fcmToken)
+                }
                 syncInbox(context)
             }
         }
