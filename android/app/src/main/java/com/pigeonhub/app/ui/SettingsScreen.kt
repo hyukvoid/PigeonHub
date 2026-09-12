@@ -10,18 +10,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.height
 import com.pigeonhub.app.BuildConfig
 import com.pigeonhub.app.R
 import com.pigeonhub.app.push.NotificationChannels
@@ -87,6 +95,40 @@ fun SettingsScreen(showSnackbar: (String) -> Unit) {
                     Permissions.openChannelSettings(context, NotificationChannels.CHANNEL_HIGH)
                 }) {
                     Text(stringResource(R.string.channel_high_name))
+                }
+            }
+        }
+
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.settings_appearance_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                val current by AppearancePrefs.mode.collectAsState()
+                val options = listOf(
+                    Appearance.SYSTEM to R.string.settings_appearance_system,
+                    Appearance.LIGHT to R.string.settings_appearance_light,
+                    Appearance.DARK to R.string.settings_appearance_dark,
+                )
+                options.forEach { (value, labelRes) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .selectable(
+                                selected = current == value,
+                                role = Role.RadioButton,
+                                onClick = { AppearancePrefs.set(context, value) },
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = current == value,
+                            onClick = { AppearancePrefs.set(context, value) },
+                        )
+                        Text(stringResource(labelRes), style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }

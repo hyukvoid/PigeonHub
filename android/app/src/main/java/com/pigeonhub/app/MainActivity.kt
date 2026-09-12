@@ -5,18 +5,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+
+
 import com.pigeonhub.app.push.NotificationChannels
 import com.pigeonhub.app.push.NotificationRenderer
 import com.pigeonhub.app.data.InboxDatabase
 import com.pigeonhub.app.push.installation.InstallationRepository
+import com.pigeonhub.app.ui.Appearance
+import com.pigeonhub.app.ui.AppearancePrefs
+import com.pigeonhub.app.ui.PigeonHubApp
+import com.pigeonhub.app.ui.TapInfo
+import com.pigeonhub.app.ui.theme.PigeonHubTheme
+import androidx.activity.SystemBarStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import com.pigeonhub.app.ui.PigeonHubApp
-import com.pigeonhub.app.ui.TapInfo
-import com.pigeonhub.app.ui.theme.PigeonHubTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -27,9 +35,24 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         NotificationChannels.ensureCreated(this)
         InstallationRepository.start(this)
+        AppearancePrefs.load(this)
         enableEdgeToEdge()
         setContent {
-            PigeonHubTheme {
+            val appearance by AppearancePrefs.mode.collectAsState()
+            val dark = when (appearance) {
+                Appearance.SYSTEM -> isSystemInDarkTheme()
+                Appearance.LIGHT -> false
+                Appearance.DARK -> true
+            }
+            // Keep the system bars legible when the in-app appearance overrides
+            // the system setting (light icons on dark backgrounds and vice versa).
+            androidx.compose.runtime.SideEffect {
+                val style = SystemBarStyle.auto(
+                    android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+                ) { dark }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
+            PigeonHubTheme(darkTheme = dark) {
                 PigeonHubApp(tap = tap.value)
             }
         }
