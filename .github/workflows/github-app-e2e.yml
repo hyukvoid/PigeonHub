@@ -1,0 +1,17 @@
+name: GitHub App E2E
+
+# Minimal workflow to trigger workflow_run.completed events so the
+# PigeonHub GitHub App webhook pipeline can be verified end-to-end:
+#   workflow run → GitHub App webhook → PigeonHub Worker → D1 → FCM → Android
+# This workflow intentionally does NOT call the PigeonHub API.
+# The existing pigeonhub-notify.yml (cURL-based) remains unchanged.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Complete a workflow run
+        run: echo "GitHub App E2E test"
