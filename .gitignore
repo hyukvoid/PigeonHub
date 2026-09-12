@@ -65,3 +65,6 @@ worker/gen_*.cjs
 Thumbs.db
 
 worker/.automation-credentials.json
+
+# local-only test credentials
+.test-invite-current

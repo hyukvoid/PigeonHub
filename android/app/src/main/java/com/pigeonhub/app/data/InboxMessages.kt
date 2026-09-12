@@ -76,6 +76,7 @@ abstract class InboxDao {
             ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, NULL, 0, NULL, " +
             ":eventType, :provider, :runId, :attentionReason, :factsJson) " +
             "ON CONFLICT(message_id) DO UPDATE SET " +
+            "seq = excluded.seq, " +
             "title = excluded.title, message = excluded.message, priority = excluded.priority, " +
             "url = excluded.url, expires_at = excluded.expires_at",
     )
@@ -100,15 +101,20 @@ abstract class InboxDao {
 
     /**
      * FCM upsert: realtime delivery. Marks device_received_at (first FCM
-     * callback wins; a sync-first row is upgraded, never duplicated). seq is
-     * nullable so legacy payloads without coordinates still land.
+     * callback wins; a sync-first row is upgraded, never duplicated). A
+     * payload without a seq coordinate (legacy publishers, webhook drift)
+     * lands on a reserved negative seq so the NOT NULL + UNIQUE(channel_id,
+     * seq) constraints hold and a crash can never kill the FCM handler;
+     * sync reconciliation replaces it with the server coordinate later.
      */
     @Query(
         "INSERT INTO inbox_messages " +
             "(message_id, channel_id, seq, title, message, priority, url, " +
             "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at, " +
             "event_type, provider, run_id, attention_reason, facts_json) " +
-            "VALUES (:messageId, :channelId, :seq, :title, :message, :priority, :url, " +
+            "VALUES (:messageId, :channelId, " +
+            "COALESCE(:seq, -(SELECT COUNT(*) FROM inbox_messages WHERE channel_id = :channelId) - 1), " +
+            ":title, :message, :priority, :url, " +
             ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, :deviceReceivedAt, 0, NULL, " +
             ":eventType, :provider, :runId, :attentionReason, :factsJson) " +
             "ON CONFLICT(message_id) DO UPDATE SET " +

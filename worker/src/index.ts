@@ -376,6 +376,13 @@ export default {
             .run();
           console.log(`github_webhook message_created=true channel=${binding.channel_id}`);
 
+          // Echo the allocated seq back to the device: the Android Room inbox
+          // stores (channel_id, seq) and the FCM path reads it for ordering.
+          const allocated = await env.DB.prepare(
+            `SELECT seq FROM messages WHERE id = ?1`,
+          ).bind(messageId).first<{ seq: number }>();
+          const allocatedSeq = allocated?.seq;
+
           // FCM to the bound device
           const installation = await env.DB.prepare(
             `SELECT fcm_token_ciphertext, fcm_token_nonce FROM installations WHERE id = ?1`,
@@ -412,6 +419,9 @@ export default {
                   data: {
                     message_id: messageId,
                     channel_id: binding.channel_id,
+                    ...(allocatedSeq !== undefined && allocatedSeq !== null
+                      ? { seq: String(allocatedSeq) }
+                      : {}),
                     title: conclusion === "success" ? "Build completed" : `Build ${conclusion}`,
                     message: `${branch} - ${conclusion}`,
                     priority: priority,
