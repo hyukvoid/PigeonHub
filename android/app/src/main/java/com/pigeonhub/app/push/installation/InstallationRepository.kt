@@ -350,7 +350,7 @@ object InstallationRepository {
         }
         if (response.code != 200) return false to "HTTP ${response.code}"
         val json = runCatching { JSONObject(response.body) }.getOrNull() ?: return false to null
-        val connectedAt = json.optString("connected_at").ifEmpty { null }
+        val connectedAt = json.optStringOrNull("connected_at")
         return json.optBoolean("connected") to connectedAt
     }
 
@@ -430,16 +430,19 @@ object InstallationRepository {
                     title = m.getString("title"),
                     message = m.getString("message"),
                     priority = m.optString("priority", "normal"),
-                    url = m.optString("url").ifEmpty { null },
+                    // org.json's optString returns the literal "null" for JSON
+                    // null values; without the isNull guard that string lands
+                    // in the DB and renders as a bogus "null" link in the UI.
+                    url = m.optStringOrNull("url"),
                     created_at = m.optString("created_at"),
                     expires_at = m.optString("expires_at"),
                     received_via = "SYNC",
                     local_received_at = now,
-                    event_type = m.optString("event_type").ifEmpty { null },
-                    provider = m.optString("provider").ifEmpty { null },
-                    run_id = m.optString("run_id").ifEmpty { null },
-                    attention_reason = m.optString("attention_reason").ifEmpty { null },
-                    facts_json = m.optString("facts_json").ifEmpty { null },
+                    event_type = m.optStringOrNull("event_type"),
+                    provider = m.optStringOrNull("provider"),
+                    run_id = m.optStringOrNull("run_id"),
+                    attention_reason = m.optStringOrNull("attention_reason"),
+                    facts_json = m.optStringOrNull("facts_json"),
                 )
             }
             val next = json.optInt("next_after_seq", after)
@@ -478,3 +481,7 @@ object InstallationRepository {
         MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 }
+
+/** optString that maps JSON null (and the literal "null" it would return) to Kotlin null. */
+internal fun org.json.JSONObject.optStringOrNull(key: String): String? =
+    if (isNull(key)) null else optString(key).ifEmpty { null }

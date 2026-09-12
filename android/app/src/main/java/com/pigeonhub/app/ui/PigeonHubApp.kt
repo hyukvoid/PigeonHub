@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 enum class Section(val labelRes: Int, val icon: ImageVector) {
     Inbox(R.string.nav_inbox, Icons.Filled.Inbox),
     Connections(R.string.nav_connections, Icons.Outlined.Cable),
-    Device(R.string.nav_connections, Icons.Outlined.PhoneAndroid),
+    Device(R.string.nav_device, Icons.Outlined.PhoneAndroid),
     Settings(R.string.nav_settings, Icons.Outlined.Settings),
 }
 

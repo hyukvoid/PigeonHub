@@ -37,6 +37,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.pigeonhub.app.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -73,7 +75,7 @@ fun HomeScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        showSnackbar(if (granted) "Notifications enabled" else "Permission denied")
+        showSnackbar(context.getString(if (granted) R.string.inbox_notifications_enabled else R.string.inbox_permission_denied))
     }
 
     Column(
@@ -88,7 +90,7 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Inbox",
+                stringResource(R.string.inbox_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -102,14 +104,14 @@ fun HomeScreen(
                     InstallationRepository.syncInbox(context)
                 }
             }) {
-                Text("Refresh")
+                Text(stringResource(R.string.inbox_refresh))
             }
         }
 
         // ---- sync / connectivity banners (never merged into empty states) ----
         syncUi.lastSummary?.error?.let { error ->
             OfflineBanner(
-                text = "Couldn't refresh - showing saved messages.",
+                text = stringResource(R.string.inbox_offline_banner),
                 onRetry = {
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                         InstallationRepository.syncInbox(context)
@@ -122,15 +124,15 @@ fun HomeScreen(
         if (!notificationsEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Notifications are off", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.inbox_notifications_off_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Messages still appear in this inbox - only the popup is affected.",
+                        stringResource(R.string.inbox_notifications_off_body),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(onClick = {
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }) {
-                        Text("Allow notifications")
+                        Text(stringResource(R.string.inbox_allow_notifications))
                     }
                 }
             }
@@ -141,7 +143,7 @@ fun HomeScreen(
             // (1) Not configured: onboarding owns the app; this is a defensive state.
             !registered -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    "Finish setup to start receiving messages.",
+                    stringResource(R.string.inbox_empty_not_configured_title),
                     textAlign = TextAlign.Center,
                 )
             }
@@ -158,16 +160,15 @@ fun HomeScreen(
                         modifier = Modifier.size(56.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text("No messages yet", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.inbox_empty_configured_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Messages from your scripts and automations will appear here - " +
-                            "even ones that arrive while you're away.",
+                        stringResource(R.string.inbox_empty_configured_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
                     TextButton(onClick = onOpenMyPush) {
-                        Text("Send your first test notification")
+                        Text(stringResource(R.string.inbox_empty_cta))
                     }
                 }
             }
@@ -210,7 +211,7 @@ private fun OfflineBanner(text: String, onRetry: () -> Unit) {
                     .weight(1f)
                     .padding(horizontal = 8.dp),
             )
-            TextButton(onClick = onRetry) { Text("Retry") }
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.inbox_retry)) }
         }
     }
 }
@@ -236,13 +237,13 @@ private fun EntryCard(
                 AssistChip(
                     onClick = {},
                     label = {
-                        Text(if (entry.priority == "high") "HIGH" else "NORMAL")
+                        Text(stringResource(if (entry.priority == "high") R.string.inbox_priority_high else R.string.inbox_priority_normal))
                     },
                 )
                 if (!entry.is_read) {
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "new",
+                        stringResource(R.string.inbox_new),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -270,7 +271,10 @@ private fun EntryCard(
                 )
             }
 
-            entry.url?.let { url ->
+            // Push ingestion is https-only; hide legacy rows whose stored url
+            // is junk (e.g. the literal "null" written by the old parser).
+            val displayUrl = entry.url?.takeIf { it.startsWith("https://") }
+            displayUrl?.let { url ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Filled.OpenInNew,
@@ -288,9 +292,9 @@ private fun EntryCard(
                             .padding(start = 6.dp),
                     )
                     FilledTonalButton(onClick = {
-                        if (!UrlOpener.open(context, url)) showSnackbar("No browser found")
+                        if (!UrlOpener.open(context, url)) showSnackbar(context.getString(R.string.inbox_no_browser))
                     }) {
-                        Text("Open")
+                        Text(stringResource(R.string.inbox_open))
                     }
                 }
             }

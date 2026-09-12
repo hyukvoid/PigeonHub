@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.pigeonhub.app.R
+import androidx.compose.ui.res.stringResource
 import com.pigeonhub.app.push.FirebaseGate
 import com.pigeonhub.app.push.installation.BootstrapStatus
 import com.pigeonhub.app.push.installation.InstallationRepository
@@ -76,7 +78,7 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
             fcmToken = token
             if (token === null) {
                 step = OnboardingStep.INVITE
-                showMessage("Setup needs Google Play services — please try again")
+                showMessage(context.getString(R.string.onboarding_needs_play_services))
             } else {
                 InstallationRepository.bootstrap(context, inviteCode, token)
             }
@@ -104,15 +106,12 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
             state.status == BootstrapStatus.RECOVERY_REQUIRED -> {
                 OnboardingCard {
                     Text(
-                        "Recovery required",
+                        stringResource(R.string.onboarding_recovery_title),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
                     Text(
-                        "The encryption key protecting this device's PigeonHub " +
-                            "credentials is no longer available, so they cannot be " +
-                            "recovered. PigeonHub will not overwrite the existing " +
-                            "installation — reinstall the app and use a new invite code.",
+                        stringResource(R.string.onboarding_recovery_body),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -121,38 +120,36 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
             step == OnboardingStep.PURPOSE -> {
                 OnboardingCard {
                     Text(
-                        "When a task finishes on your PC,\nthis phone tells you.",
+                        stringResource(R.string.onboarding_purpose_headline),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Point your scripts, CI, or automations at PigeonHub and the " +
-                            "result lands on this phone as a notification.",
+                        stringResource(R.string.onboarding_purpose_body),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "Important results stay in your Inbox, so a notification " +
-                            "you missed is never lost.",
+                        stringResource(R.string.onboarding_purpose_inbox_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(onClick = { step = OnboardingStep.INVITE }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Get started")
+                        Text(stringResource(R.string.onboarding_get_started))
                     }
                 }
             }
 
             step == OnboardingStep.INVITE -> {
                 OnboardingCard {
-                    Text("Private beta", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.onboarding_invite_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "PigeonHub is currently available to invited users only.",
+                        stringResource(R.string.onboarding_invite_body),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     OutlinedTextField(
                         value = inviteCode,
                         onValueChange = { inviteCode = it.trim() },
-                        label = { Text("Invite code") },
+                        label = { Text(stringResource(R.string.onboarding_invite_field_label)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -162,7 +159,7 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
                     Button(
                         onClick = {
                             if (inviteCode.length < 6) {
-                                inviteError = "That invite code doesn't look right."
+                                inviteError = context.getString(R.string.onboarding_invite_invalid)
                             } else {
                                 inviteError = null
                                 step = OnboardingStep.PERMISSION
@@ -171,27 +168,25 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
                         enabled = inviteCode.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Continue")
+                        Text(stringResource(R.string.onboarding_invite_continue))
                     }
                     Text(
-                        "Why do I need a code?",
+                        stringResource(R.string.onboarding_invite_why_title),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Every device creates its own private push channel. During the " +
-                            "private beta, a single-use invite keeps that channel yours " +
-                            "and keeps public spam out of the service.",
+                        stringResource(R.string.onboarding_invite_why_body),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "Where can I get one?",
+                        stringResource(R.string.onboarding_invite_where_title),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Invites are distributed by the PigeonHub maintainer.",
+                        stringResource(R.string.onboarding_invite_where_body),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -200,10 +195,9 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
 
             step == OnboardingStep.PERMISSION -> {
                 OnboardingCard {
-                    Text("Allow notifications", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.onboarding_permission_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "PigeonHub shows a notification the moment one of your tasks " +
-                            "finishes. Android requires your permission for this.",
+                        stringResource(R.string.onboarding_permission_body),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(
@@ -227,7 +221,7 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Allow notifications")
+                        Text(stringResource(R.string.onboarding_permission_allow))
                     }
                     TextButton(onClick = {
                         permissionDenied = true
@@ -247,11 +241,10 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
                             }
                         }
                     }) {
-                        Text("Not now")
+                        Text(stringResource(R.string.onboarding_permission_skip))
                     }
                     Text(
-                        "You can skip this. Messages still appear in your Inbox; " +
-                            "only the popup is affected.",
+                        stringResource(R.string.onboarding_permission_skip_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -269,11 +262,13 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
                     ) {
                         CircularProgressIndicator(Modifier.size(32.dp))
                         Text(
-                            if (permissionDenied) {
-                                "Notifications are off.\nMessages will still appear in your Inbox."
-                            } else {
-                                "Setting up PigeonHub..."
-                            },
+                            stringResource(
+                                if (permissionDenied) {
+                                    R.string.onboarding_notifications_off_msg
+                                } else {
+                                    R.string.onboarding_setting_up
+                                }
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
@@ -284,7 +279,7 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             TextButton(onClick = { step = OnboardingStep.INVITE }) {
-                                Text("Back")
+                                Text(stringResource(R.string.common_back))
                             }
                         }
                     }

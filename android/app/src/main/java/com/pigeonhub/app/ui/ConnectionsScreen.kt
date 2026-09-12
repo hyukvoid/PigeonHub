@@ -170,6 +170,9 @@ fun ConnectionsScreen(
                     val context = LocalContext.current
                     var testBusy by remember { mutableStateOf(false) }
                     var testResult by remember { mutableStateOf<String?>(null) }
+                    val testDoneText = stringResource(R.string.connections_test_done)
+                    val testMessageText = stringResource(R.string.connections_test_message)
+                    val testFailedFmt = stringResource(R.string.connections_test_failed)
                     Button(
                         onClick = {
                             testBusy = true
@@ -177,11 +180,11 @@ fun ConnectionsScreen(
                             scope.launch {
                                 val (ok, detail) = InstallationRepository.sendTestNotification(
                                     title = "PigeonHub",
-                                    message = "Test notification from your device.",
+                                    message = testMessageText,
                                 )
                                 withContext(kotlinx.coroutines.Dispatchers.Main) {
                                     testBusy = false
-                                    testResult = if (ok) "전송 완료 — 알림을 확인하세요" else "전송 실패 ($detail)"
+                                    testResult = if (ok) testDoneText else String.format(testFailedFmt, detail)
                                 }
                             }
                         },
@@ -192,7 +195,7 @@ fun ConnectionsScreen(
                             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
                         }
-                        Text("Test 나에게 보내기")
+                        Text(stringResource(R.string.connections_send_test))
                     }
                     testResult?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

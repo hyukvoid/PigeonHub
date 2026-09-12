@@ -19,9 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pigeonhub.app.BuildConfig
+import com.pigeonhub.app.R
 import com.pigeonhub.app.push.NotificationChannels
 
 @Composable
@@ -37,7 +39,7 @@ fun SettingsScreen(showSnackbar: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "Settings",
+            stringResource(R.string.settings_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(vertical = 12.dp),
@@ -45,61 +47,62 @@ fun SettingsScreen(showSnackbar: (String) -> Unit) {
 
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Notifications", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    if (enabled) "Permission granted" else "Permission not granted",
+                    stringResource(R.string.settings_notifications_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(
+                        if (enabled) R.string.settings_notifications_granted
+                        else R.string.settings_notifications_denied
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                 )
                 FilledTonalButton(onClick = { Permissions.openAppNotificationSettings(context) }) {
-                    Text("App notification settings")
+                    Text(stringResource(R.string.settings_open_app_notification_settings))
                 }
                 FilledTonalButton(onClick = {
                     context.startActivity(
                         Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
                 }) {
-                    Text("Android system settings")
+                    Text(stringResource(R.string.settings_open_system_settings))
                 }
             }
         }
 
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Channels", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.settings_channels_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 FilledTonalButton(onClick = {
                     Permissions.openChannelSettings(context, NotificationChannels.CHANNEL_NORMAL)
                 }) {
-                    Text("PigeonHub Normal")
+                    Text(stringResource(R.string.channel_normal_name))
                 }
                 FilledTonalButton(onClick = {
                     Permissions.openChannelSettings(context, NotificationChannels.CHANNEL_HIGH)
                 }) {
-                    Text("PigeonHub High")
+                    Text(stringResource(R.string.channel_high_name))
                 }
             }
         }
 
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("About", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "PigeonHub — push notifications for developers, straight from a " +
-                        "curl request to your pocket.",
+                    stringResource(R.string.settings_about_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(R.string.settings_about_body),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    "applicationId: ${BuildConfig.APPLICATION_ID}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "version: ${BuildConfig.VERSION_NAME}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "FCM integration: BLOCKED_PENDING_FIREBASE_SETUP (docs/FIREBASE_SETUP.md)",
+                    stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

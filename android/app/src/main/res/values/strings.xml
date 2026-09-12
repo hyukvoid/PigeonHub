@@ -4,6 +4,7 @@
     <!-- Bottom navigation -->
     <string name="nav_inbox">Inbox</string>
     <string name="nav_connections">Connections</string>
+    <string name="nav_device">Diagnostics</string>
     <string name="nav_settings">Settings</string>
 
     <!-- Inbox -->
@@ -11,6 +12,7 @@
     <string name="inbox_empty_configured_title">No messages yet</string>
     <string name="inbox_empty_configured_body">Messages from your scripts and automations will appear here — even ones that arrive while you\'re away.</string>
     <string name="inbox_empty_not_configured_title">Finish setup to start receiving messages.</string>
+    <string name="inbox_empty_cta">Send your first test notification</string>
     <string name="inbox_offline_banner">Couldn\'t refresh — showing saved messages.</string>
     <string name="inbox_notifications_off_title">Notifications are off</string>
     <string name="inbox_notifications_off_body">Messages still appear in this inbox — only the popup is affected.</string>
@@ -18,6 +20,12 @@
     <string name="inbox_refresh">Refresh</string>
     <string name="inbox_retry">Retry</string>
     <string name="inbox_new">new</string>
+    <string name="inbox_priority_high">High</string>
+    <string name="inbox_priority_normal">Normal</string>
+    <string name="inbox_open">Open</string>
+    <string name="inbox_no_browser">No browser found</string>
+    <string name="inbox_notifications_enabled">Notifications enabled</string>
+    <string name="inbox_permission_denied">Permission denied</string>
 
     <!-- Onboarding -->
     <string name="onboarding_app_name">PigeonHub</string>
@@ -29,6 +37,7 @@
     <string name="onboarding_invite_body">PigeonHub is currently available to invited users only.</string>
     <string name="onboarding_invite_field_label">Invite code</string>
     <string name="onboarding_invite_continue">Continue</string>
+    <string name="onboarding_invite_invalid">That invite code doesn\'t look right.</string>
     <string name="onboarding_invite_why_title">Why do I need a code?</string>
     <string name="onboarding_invite_why_body">Every device creates its own private push channel. During the private beta, a single-use invite keeps that channel yours and keeps public spam out of the service.</string>
     <string name="onboarding_invite_where_title">Where can I get one?</string>
@@ -39,6 +48,7 @@
     <string name="onboarding_permission_skip">Not now</string>
     <string name="onboarding_permission_skip_hint">You can skip this. Messages still appear in your Inbox; only the popup is affected.</string>
     <string name="onboarding_setting_up">Setting up PigeonHub…</string>
+    <string name="onboarding_needs_play_services">Setup needs Google Play services — please try again</string>
     <string name="onboarding_notifications_off_msg">Notifications are off.\nMessages will still appear in your Inbox.</string>
     <string name="onboarding_recovery_title">Recovery required</string>
     <string name="onboarding_recovery_body">The encryption key protecting this device\'s PigeonHub credentials is no longer available, so they cannot be recovered. PigeonHub will not overwrite the existing installation — reinstall the app and use a new invite code.</string>
@@ -51,6 +61,9 @@
     <string name="connections_copy_endpoint">Copy endpoint</string>
     <string name="connections_copy_curl">Copy cURL</string>
     <string name="connections_send_test">Send test notification</string>
+    <string name="connections_test_message">Test notification from your device.</string>
+    <string name="connections_test_done">Sent — check your notification</string>
+    <string name="connections_test_failed">Send failed (%1$s)</string>
     <string name="connections_send_key_title">Send key</string>
     <string name="connections_send_key_hint">Anyone with this key can send pushes to your phone. Regenerate it if it ever leaves your control.</string>
     <string name="connections_regenerate_key">Regenerate send key</string>
@@ -98,13 +111,22 @@
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_notifications_granted">Granted</string>
     <string name="settings_notifications_denied">Not granted</string>
-    <string name="settings_open_android_notification_settings">Open Android notification settings</string>
+    <string name="settings_open_app_notification_settings">App notification settings</string>
+    <string name="settings_open_system_settings">Android system settings</string>
     <string name="settings_channels_title">Notification channels</string>
     <string name="settings_about_title">About</string>
+    <string name="settings_about_body">Push notifications for developers — straight from a script to your pocket.</string>
+    <string name="settings_version">Version %1$s</string>
     <string name="settings_language_title">Language</string>
     <string name="settings_language_system">System default</string>
     <string name="settings_language_korean">한국어</string>
     <string name="settings_language_english">English</string>
+
+    <!-- Appearance -->
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_appearance_system">System</string>
+    <string name="settings_appearance_light">Light</string>
+    <string name="settings_appearance_dark">Dark</string>
 
     <!-- Common -->
     <string name="common_copy">Copy</string>
