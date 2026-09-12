@@ -1,7 +1,117 @@
 <resources>
     <string name="app_name">PigeonHub</string>
 
-    <!-- Notification channels. Names are user-facing; importance is set in code. -->
+    <!-- Bottom navigation -->
+    <string name="nav_inbox">Inbox</string>
+    <string name="nav_connections">Connections</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Inbox -->
+    <string name="inbox_title">Inbox</string>
+    <string name="inbox_empty_configured_title">No messages yet</string>
+    <string name="inbox_empty_configured_body">Messages from your scripts and automations will appear here — even ones that arrive while you\'re away.</string>
+    <string name="inbox_empty_not_configured_title">Finish setup to start receiving messages.</string>
+    <string name="inbox_offline_banner">Couldn\'t refresh — showing saved messages.</string>
+    <string name="inbox_notifications_off_title">Notifications are off</string>
+    <string name="inbox_notifications_off_body">Messages still appear in this inbox — only the popup is affected.</string>
+    <string name="inbox_allow_notifications">Allow notifications</string>
+    <string name="inbox_refresh">Refresh</string>
+    <string name="inbox_retry">Retry</string>
+    <string name="inbox_new">new</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_app_name">PigeonHub</string>
+    <string name="onboarding_purpose_headline">When a task finishes on your PC,\nthis phone tells you.</string>
+    <string name="onboarding_purpose_body">Point your scripts, CI, or automations at PigeonHub and the result lands on this phone as a notification.</string>
+    <string name="onboarding_purpose_inbox_hint">Important results stay in your Inbox, so a notification you missed is never lost.</string>
+    <string name="onboarding_get_started">Get started</string>
+    <string name="onboarding_invite_title">Private beta</string>
+    <string name="onboarding_invite_body">PigeonHub is currently available to invited users only.</string>
+    <string name="onboarding_invite_field_label">Invite code</string>
+    <string name="onboarding_invite_continue">Continue</string>
+    <string name="onboarding_invite_why_title">Why do I need a code?</string>
+    <string name="onboarding_invite_why_body">Every device creates its own private push channel. During the private beta, a single-use invite keeps that channel yours and keeps public spam out of the service.</string>
+    <string name="onboarding_invite_where_title">Where can I get one?</string>
+    <string name="onboarding_invite_where_body">Invites are distributed by the PigeonHub maintainer.</string>
+    <string name="onboarding_permission_title">Allow notifications</string>
+    <string name="onboarding_permission_body">PigeonHub shows a notification the moment one of your tasks finishes. Android requires your permission for this.</string>
+    <string name="onboarding_permission_allow">Allow notifications</string>
+    <string name="onboarding_permission_skip">Not now</string>
+    <string name="onboarding_permission_skip_hint">You can skip this. Messages still appear in your Inbox; only the popup is affected.</string>
+    <string name="onboarding_setting_up">Setting up PigeonHub…</string>
+    <string name="onboarding_notifications_off_msg">Notifications are off.\nMessages will still appear in your Inbox.</string>
+    <string name="onboarding_recovery_title">Recovery required</string>
+    <string name="onboarding_recovery_body">The encryption key protecting this device\'s PigeonHub credentials is no longer available, so they cannot be recovered. PigeonHub will not overwrite the existing installation — reinstall the app and use a new invite code.</string>
+
+    <!-- My Push / Connections -->
+    <string name="connections_title">Connections</string>
+    <string name="connections_mypush_title">My Push</string>
+    <string name="connections_status_connected">Connected</string>
+    <string name="connections_endpoint_label">Endpoint</string>
+    <string name="connections_copy_endpoint">Copy endpoint</string>
+    <string name="connections_copy_curl">Copy cURL</string>
+    <string name="connections_send_test">Send test notification</string>
+    <string name="connections_send_key_title">Send key</string>
+    <string name="connections_send_key_hint">Anyone with this key can send pushes to your phone. Regenerate it if it ever leaves your control.</string>
+    <string name="connections_regenerate_key">Regenerate send key</string>
+    <string name="connections_connect_automation_title">Connect an automation</string>
+    <string name="connections_connect_automation_body">Send a message from any script, CI job, or terminal: copy your endpoint and send key, then make a POST request. Or start from the GitHub Actions example below.</string>
+    <string name="connections_gh_actions_example">GitHub Actions example</string>
+
+    <!-- GitHub connection -->
+    <string name="github_title">GitHub</string>
+    <string name="github_tagline">Get build alerts</string>
+    <string name="github_connect">Connect</string>
+    <string name="github_connected">Connected</string>
+    <string name="github_disconnect">Disconnect</string>
+    <string name="github_health_connected">Connected</string>
+    <string name="github_health_no_events">Connected. No new events yet.</string>
+    <string name="github_health_last_event">Last event: %1$s ago</string>
+    <string name="github_health_notifications_ok">Notifications: Working</string>
+    <string name="github_health_notifications_off">Phone notifications are off.</string>
+    <string name="github_health_open_notification_settings">Open notification settings</string>
+    <string name="github_connection_test_label">Connection test</string>
+    <string name="github_no_workflows">No GitHub Actions runs yet.\nWe\'ll notify you when a workflow completes.</string>
+    <string name="github_repo_select_hint">Select repositories to watch</string>
+
+    <!-- AI Agents -->
+    <string name="ai_agents_title">AI Agents</string>
+    <string name="ai_agents_tagline">Know when your agents need you</string>
+    <string name="ai_agents_setup">Set up</string>
+
+    <!-- Custom -->
+    <string name="custom_title">Custom</string>
+    <string name="custom_tagline">Connect anything with an API</string>
+    <string name="custom_setup">Set up</string>
+
+    <!-- Delivery states -->
+    <string name="delivery_server_accepted">Saved on the PigeonHub server. Delivery to this device hasn\'t been confirmed yet.</string>
+    <string name="delivery_device_received">This device received the push.</string>
+    <string name="delivery_sync_recovered">The push wasn\'t confirmed, but the message was recovered into your Inbox.</string>
+    <string name="delivery_os_disabled">Android notifications are off. The message still appears in your Inbox.</string>
+    <string name="delivery_sending">Sending…</string>
+    <string name="delivery_send_failed">send failed</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_notifications_title">Notifications</string>
+    <string name="settings_notifications_granted">Granted</string>
+    <string name="settings_notifications_denied">Not granted</string>
+    <string name="settings_open_android_notification_settings">Open Android notification settings</string>
+    <string name="settings_channels_title">Notification channels</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_language_title">Language</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_korean">한국어</string>
+    <string name="settings_language_english">English</string>
+
+    <!-- Common -->
+    <string name="common_copy">Copy</string>
+    <string name="common_copied">Copied</string>
+    <string name="common_close">Close</string>
+    <string name="common_back">Back</string>
+    <string name="common_error">Error</string>
+    <!-- Notification channels -->
     <string name="channel_normal_name">PigeonHub Normal</string>
     <string name="channel_normal_description">Regular PigeonHub notifications</string>
     <string name="channel_high_name">PigeonHub High</string>

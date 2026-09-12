@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Cable
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -25,32 +25,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.pigeonhub.app.BuildConfig
+import com.pigeonhub.app.R
 import com.pigeonhub.app.push.installation.BootstrapStatus
 import com.pigeonhub.app.push.installation.InstallationRepository
 import kotlinx.coroutines.launch
 
-enum class Section(val label: String, val icon: ImageVector) {
-    Inbox("Inbox", Icons.Filled.Inbox),
-    MyPush("My Push", Icons.Outlined.Notifications),
-    Device("Device", Icons.Outlined.PhoneAndroid),
-    Settings("Settings", Icons.Outlined.Settings),
+enum class Section(val labelRes: Int, val icon: ImageVector) {
+    Inbox(R.string.nav_inbox, Icons.Filled.Inbox),
+    Connections(R.string.nav_connections, Icons.Outlined.Cable),
+    Device(R.string.nav_connections, Icons.Outlined.PhoneAndroid),
+    Settings(R.string.nav_settings, Icons.Outlined.Settings),
 }
 
-// Debug-only section: kept out of the release navigation entirely.
-private val DEBUG_SECTIONS = listOf(
-    Section.Inbox,
-    Section.MyPush,
-    Section.Device,
-    Section.Settings,
-)
-
-private val RELEASE_SECTIONS = listOf(Section.Inbox, Section.MyPush, Section.Settings)
+private val RELEASE_SECTIONS = listOf(Section.Inbox, Section.Connections, Section.Settings)
+private val DEBUG_SECTIONS = listOf(Section.Inbox, Section.Connections, Section.Device, Section.Settings)
 
 @Composable
 fun PigeonHubApp(tap: TapInfo?) {
-    val context = LocalContext.current
     val installState by InstallationRepository.state.collectAsState()
     val registered = installState.status == BootstrapStatus.REGISTERED
     val snackbarHostState = remember { SnackbarHostState() }
@@ -60,7 +53,6 @@ fun PigeonHubApp(tap: TapInfo?) {
     }
 
     if (!registered) {
-        // First-use onboarding owns the whole screen until the installation is READY.
         OnboardingScreen(showMessage = showMessage)
         return
     }
@@ -72,7 +64,6 @@ fun PigeonHubApp(tap: TapInfo?) {
     val section = runCatching { Section.valueOf(sectionName) }.getOrDefault(Section.Inbox)
         .let { chosen -> if (visibleSections.contains(chosen)) chosen else visibleSections.first() }
 
-    // A notification tap always lands the user on the inbox.
     LaunchedEffect(tap) {
         if (tap != null) sectionName = Section.Inbox.name
     }
@@ -85,8 +76,8 @@ fun PigeonHubApp(tap: TapInfo?) {
                     NavigationBarItem(
                         selected = candidate == section,
                         onClick = { sectionName = candidate.name },
-                        icon = { Icon(candidate.icon, contentDescription = candidate.label) },
-                        label = { Text(candidate.label) },
+                        icon = { Icon(candidate.icon, contentDescription = stringResource(candidate.labelRes)) },
+                        label = { Text(stringResource(candidate.labelRes)) },
                     )
                 }
             }
@@ -96,16 +87,17 @@ fun PigeonHubApp(tap: TapInfo?) {
             when (section) {
                 Section.Inbox -> HomeScreen(
                     tap = tap,
-                    onOpenMyPush = { sectionName = Section.MyPush.name },
+                    onOpenMyPush = { sectionName = Section.Connections.name },
                     showSnackbar = showMessage,
                 )
-                Section.MyPush -> MyPushScreen(showSnackbar = showMessage)
+                Section.Connections -> ConnectionsScreen(
+                    onOpenMyPush = { sectionName = Section.Connections.name },
+                    showSnackbar = showMessage,
+                )
                 Section.Settings -> SettingsScreen(showSnackbar = showMessage)
                 Section.Device -> if (BuildConfig.DEBUG) DeviceScreen(showSnackbar = showMessage)
+                else -> {}
             }
         }
     }
-    // context kept for future use in this scope
-    @Suppress("UNUSED_EXPRESSION")
-    context
 }

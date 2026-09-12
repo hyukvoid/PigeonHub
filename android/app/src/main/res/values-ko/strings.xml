@@ -1,0 +1,104 @@
+<resources>
+    <string name="app_name">PigeonHub</string>
+
+    <string name="nav_inbox">수신함</string>
+    <string name="nav_connections">연결</string>
+    <string name="nav_settings">설정</string>
+
+    <string name="inbox_title">수신함</string>
+    <string name="inbox_empty_configured_title">아직 메시지가 없어요</string>
+    <string name="inbox_empty_configured_body">스크립트와 자동화에서 보낸 메시지가 여기에 표시돼요 — 자리를 비운 동안 도착한 것도요.</string>
+    <string name="inbox_empty_not_configured_title">설정을 완료하면 메시지를 받을 수 있어요.</string>
+    <string name="inbox_offline_banner">새로고침할 수 없어요 — 저장된 메시지를 표시하고 있어요.</string>
+    <string name="inbox_notifications_off_title">알림이 꺼져 있어요</string>
+    <string name="inbox_notifications_off_body">메시지는 수신함에 계속 표시돼요 — 팝업 알림만 꺼져 있어요.</string>
+    <string name="inbox_allow_notifications">알림 허용</string>
+    <string name="inbox_refresh">새로고침</string>
+    <string name="inbox_retry">다시 시도</string>
+    <string name="inbox_new">새 메시지</string>
+
+    <string name="onboarding_app_name">PigeonHub</string>
+    <string name="onboarding_purpose_headline">PC에서 작업이 끝나면\n이 휴대폰으로 알려드려요.</string>
+    <string name="onboarding_purpose_body">스크립트, CI, 자동화를 PigeonHub에 연결하면 결과가 이 휴대폰으로 알림으로 도착해요.</string>
+    <string name="onboarding_purpose_inbox_hint">중요한 결과는 수신함에 남기 때문에 놓친 알림도 다시 확인할 수 있어요.</string>
+    <string name="onboarding_get_started">시작하기</string>
+    <string name="onboarding_invite_title">프라이빗 베타</string>
+    <string name="onboarding_invite_body">PigeonHub는 현재 초대 사용자만 사용할 수 있어요.</string>
+    <string name="onboarding_invite_field_label">초대 코드</string>
+    <string name="onboarding_invite_continue">계속</string>
+    <string name="onboarding_invite_why_title">초대 코드가 왜 필요한가요?</string>
+    <string name="onboarding_invite_why_body">모든 기기는 자신만의 프라이빗 푸시 채널을 만들어요. 프라이빗 베타 동안 일회용 초대 코드가 그 채널을 본인 것으로 유지하고 공개 스팸을 차단해요.</string>
+    <string name="onboarding_invite_where_title">초대 코드는 어디서 받나요?</string>
+    <string name="onboarding_invite_where_body">초대 코드는 PigeonHub 관리자가 배포합니다.</string>
+    <string name="onboarding_permission_title">알림 허용</string>
+    <string name="onboarding_permission_body">작업이 끝나면 PigeonHub가 즉시 알림으로 알려드려요. Android에서 권한이 필요해요.</string>
+    <string name="onboarding_permission_allow">알림 허용</string>
+    <string name="onboarding_permission_skip">나중에</string>
+    <string name="onboarding_permission_skip_hint">건너뛰어도 괜찮아요. 메시지는 수신함에 계속 표시돼요. 팝업 알림에만 영향을 줘요.</string>
+    <string name="onboarding_setting_up">PigeonHub 설정 중…</string>
+    <string name="onboarding_notifications_off_msg">알림이 꺼져 있어요.\n메시지는 수신함에 계속 표시돼요.</string>
+    <string name="onboarding_recovery_title">복구 필요</string>
+    <string name="onboarding_recovery_body">이 기기의 PigeonHub 자격 증명을 보호하는 암호화 키를 더 이상 사용할 수 없어요. PigeonHub는 기존 설치를 덮어쓰지 않아요 — 앱을 다시 설치하고 새 초대 코드를 사용해 주세요.</string>
+
+    <string name="connections_title">연결</string>
+    <string name="connections_mypush_title">My Push</string>
+    <string name="connections_status_connected">연결됨</string>
+    <string name="connections_endpoint_label">엔드포인트</string>
+    <string name="connections_copy_endpoint">엔드포인트 복사</string>
+    <string name="connections_copy_curl">cURL 복사</string>
+    <string name="connections_send_test">테스트 알림 보내기</string>
+    <string name="connections_send_key_title">전송 키</string>
+    <string name="connections_send_key_hint">이 키가 있으면 누구나 휴대폰으로 푸시를 보낼 수 있어요. 유출되었다면 재생성하세요.</string>
+    <string name="connections_regenerate_key">전송 키 재생성</string>
+    <string name="connections_connect_automation_title">자동화 연결</string>
+    <string name="connections_connect_automation_body">스크립트, CI, 터미널에서 메시지를 보내세요: 엔드포인트와 전송 키를 복사한 후 POST 요청을 보내면 돼요. 또는 아래 GitHub Actions 예제로 시작하세요.</string>
+    <string name="connections_gh_actions_example">GitHub Actions 예제</string>
+
+    <string name="github_title">GitHub</string>
+    <string name="github_tagline">빌드 결과를 받아보세요</string>
+    <string name="github_connect">연결</string>
+    <string name="github_connected">연결됨</string>
+    <string name="github_disconnect">연결 해제</string>
+    <string name="github_health_connected">연결됨</string>
+    <string name="github_health_no_events">연결 정상이에요. 아직 새 이벤트가 없어요.</string>
+    <string name="github_health_last_event">마지막 이벤트: %1$s 전</string>
+    <string name="github_health_notifications_ok">알림: 정상</string>
+    <string name="github_health_notifications_off">휴대폰 알림이 꺼져 있어요.</string>
+    <string name="github_health_open_notification_settings">알림 설정 열기</string>
+    <string name="github_connection_test_label">연결 테스트</string>
+    <string name="github_no_workflows">아직 GitHub Actions 실행 기록이 없어요.\nWorkflow가 처음 완료되면 알려드릴게요.</string>
+    <string name="github_repo_select_hint">감시할 repository를 선택하세요</string>
+
+    <string name="ai_agents_title">AI 에이전트</string>
+    <string name="ai_agents_tagline">에이전트가 내 확인을 필요로 할 때 알려드려요</string>
+    <string name="ai_agents_setup">설정</string>
+
+    <string name="custom_title">사용자 설정</string>
+    <string name="custom_tagline">API로 원하는 작업을 연결하세요</string>
+    <string name="custom_setup">설정</string>
+
+    <string name="delivery_server_accepted">서버에 저장했어요. 이 기기에서의 수신은 아직 확인되지 않았어요.</string>
+    <string name="delivery_device_received">이 기기에서 푸시를 받았어요.</string>
+    <string name="delivery_sync_recovered">푸시는 확인되지 않았지만 수신함에서 메시지를 복구했어요.</string>
+    <string name="delivery_os_disabled">Android 알림이 꺼져 있어요. 수신함에서는 계속 확인할 수 있어요.</string>
+    <string name="delivery_sending">보내는 중…</string>
+    <string name="delivery_send_failed">전송 실패</string>
+
+    <string name="settings_title">설정</string>
+    <string name="settings_notifications_title">알림</string>
+    <string name="settings_notifications_granted">허용됨</string>
+    <string name="settings_notifications_denied">허용 안 됨</string>
+    <string name="settings_open_android_notification_settings">Android 알림 설정 열기</string>
+    <string name="settings_channels_title">알림 채널</string>
+    <string name="settings_about_title">정보</string>
+    <string name="settings_language_title">언어</string>
+    <string name="settings_language_system">시스템 기본값</string>
+    <string name="settings_language_korean">한국어</string>
+    <string name="settings_language_english">English</string>
+
+    <string name="common_copy">복사</string>
+    <string name="common_copied">복사됨</string>
+    <string name="common_close">닫기</string>
+    <string name="common_back">뒤로</string>
+    <string name="common_error">오류</string>
+</resources>
