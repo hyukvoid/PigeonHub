@@ -81,11 +81,15 @@ object InstallationRepository {
             // Cold-start sync trigger (MVP-001D). Foreground + manual refresh
             // triggers live in the UI; polling is deliberately not used.
             if (mutableState.value.status == BootstrapStatus.REGISTERED) {
-                // Refresh the FCM push token on the server (MVP-003B fix:
-                // stale FCM tokens caused 404 NotRegistered on webhook pushes).
-                val fcmToken = DevicePrefs.loadFcmToken(context)
-                if (!fcmToken.isNullOrEmpty()) {
-                    updatePushToken(context, fcmToken)
+                // MVP-003B fix: fetch the CURRENT FCM token from Firebase
+                // (not from DevicePrefs) to prevent 404 NotRegistered on
+                // webhook-triggered pushes after emulator/device restarts.
+                val freshToken = withContext(Dispatchers.IO) {
+                    val gate = com.pigeonhub.app.push.FirebaseGate.fetchTokenBlocking(context)
+                    (gate as? com.pigeonhub.app.push.FirebaseGate.FcmState.Ready)?.token
+                }
+                if (freshToken != null) {
+                    updatePushToken(context, freshToken)
                 }
                 syncInbox(context)
             }
