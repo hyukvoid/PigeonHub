@@ -58,6 +58,7 @@
     <string name="github_tagline">빌드 결과를 받아보세요</string>
     <string name="github_connect">연결</string>
     <string name="github_connected">연결됨</string>
+    <string name="github_not_connected">연결 안 됨</string>
     <string name="github_disconnect">연결 해제</string>
     <string name="github_health_connected">연결됨</string>
     <string name="github_health_no_events">연결 정상이에요. 아직 새 이벤트가 없어요.</string>

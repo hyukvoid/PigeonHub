@@ -24,6 +24,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -54,6 +55,16 @@ fun ConnectionsScreen(
     val installState by InstallationRepository.state.collectAsState()
     val scope = rememberCoroutineScope()
     val registered = installState.status == BootstrapStatus.REGISTERED
+
+    // Real GitHub connection state. The status read doubles as the
+    // owner-scoped auto-join: a reinstalled or brand-new device inherits
+    // the GitHub connection here, so fan-out grows without any re-connect.
+    var githubConnected by remember { mutableStateOf(false) }
+    LaunchedEffect(registered) {
+        if (registered) {
+            githubConnected = InstallationRepository.fetchGitHubConnectionStatus().first
+        }
+    }
 
     Column(
         Modifier
@@ -86,20 +97,34 @@ fun ConnectionsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(
-                        Icons.Filled.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        stringResource(R.string.github_connected),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    if (githubConnected) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            stringResource(R.string.github_connected),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.github_not_connected),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 val connectLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
-                ) { onOpenMyPush() }
+                ) {
+                    // Returning from the GitHub page: re-poll; the status read
+                    // completes the owner-scoped join for this device.
+                    scope.launch {
+                        githubConnected = InstallationRepository.fetchGitHubConnectionStatus().first
+                    }
+                }
                 Button(onClick = {
                     val intent = Intent(
                         Intent.ACTION_VIEW,

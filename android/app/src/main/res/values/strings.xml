@@ -63,6 +63,7 @@
     <string name="github_tagline">Get build alerts</string>
     <string name="github_connect">Connect</string>
     <string name="github_connected">Connected</string>
+    <string name="github_not_connected">Not connected</string>
     <string name="github_disconnect">Disconnect</string>
     <string name="github_health_connected">Connected</string>
     <string name="github_health_no_events">Connected. No new events yet.</string>

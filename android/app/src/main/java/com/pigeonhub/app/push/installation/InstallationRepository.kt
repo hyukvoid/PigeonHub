@@ -328,6 +328,32 @@ object InstallationRepository {
         return (response.code in 200..299 && stored) to pushStatus
     }
 
+    /**
+     * GitHub connection state for the Connections card. The server-side
+     * status read also performs the owner-scoped auto-join, so a freshly
+     * reinstalled or newly added device inherits the GitHub connection on
+     * this poll — no re-connection ritual, and joining never disturbs the
+     * other devices already receiving fan-out (beta: single owner).
+     */
+    suspend fun fetchGitHubConnectionStatus(): Pair<Boolean, String?> {
+        val state = mutableState.value
+        val credentials = currentCredentials
+        if (state.status != BootstrapStatus.REGISTERED || credentials === null) {
+            return false to null
+        }
+        val response = withContext(Dispatchers.IO) {
+            WorkerApi.request(
+                method = "GET",
+                url = "$WORKER_ORIGIN/v1/github/status",
+                bearer = credentials.managementSecret,
+            )
+        }
+        if (response.code != 200) return false to "HTTP ${response.code}"
+        val json = runCatching { JSONObject(response.body) }.getOrNull() ?: return false to null
+        val connectedAt = json.optString("connected_at").ifEmpty { null }
+        return json.optBoolean("connected") to connectedAt
+    }
+
     fun buildCurl(title: String = "Hello", message: String = "PigeonHub works"): String? {
         val state = mutableState.value
         val credentials = currentCredentials

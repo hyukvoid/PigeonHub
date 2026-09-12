@@ -7,7 +7,7 @@ import {
   updatePushStatus,
 } from "./d1.js";
 import { runMaintenance, betaCapacityReached } from "./maintenance.js";
-import { getInstallUrl, getGitHubConnectionStatus, bindGitHubInstallation } from "./github_connection.js";
+import { getInstallUrl, getGitHubConnectionStatus, addAllUnboundAsMembers, getFanoutTargets } from "./github_connection.js";
 import { sendToFcm } from "./fcm.js";
 import { getAccessToken } from "./gcp_auth.js";
 import { canonicalRequestHash } from "./d1.js";
@@ -323,31 +323,26 @@ export default {
         const eventName = request.headers.get("X-GitHub-Event") ?? "unknown";
         console.log(`github_webhook event=${eventName} action=${event.action ?? "n/a"} installation=${event.installation?.id ?? "n/a"}`);
 
-        // installation.created → bind GitHub installation to PigeonHub installation
+        // installation.created → every active installation joins as a
+        // fan-out member (beta: single owner; never a 1:1 steal)
         if (eventName === "installation" && event.action === "created" && event.installation?.id) {
-          const bound = await bindGitHubInstallation(env, String(event.installation.id));
-          console.log(`github_installation=${event.installation.id} binding_found=${bound}`);
-          return json({ ok: true, bound });
+          const added = await addAllUnboundAsMembers(env, String(event.installation.id));
+          console.log(`github_installation=${event.installation.id} members_added=${added}`);
+          return json({ ok: true, members_added: added });
         }
 
-        // workflow_run → create durable message + FCM to the bound device
+        // workflow_run → durable message + FCM fan-out to EVERY member device
         if (eventName === "workflow_run" && event.workflow_run && event.action === "completed") {
           const wr = event.workflow_run;
           const ghInstallId = String(event.installation?.id ?? "");
           console.log(`github_webhook event=workflow_run action=completed github_installation=${ghInstallId}`);
 
-          const binding = await env.DB.prepare(
-            `SELECT gc.pigeonhub_installation_id, c.id AS channel_id
-             FROM github_connections gc
-             JOIN channels c ON c.installation_id = gc.pigeonhub_installation_id
-             WHERE gc.github_installation_id = ?1`,
-          ).bind(ghInstallId).first<{ pigeonhub_installation_id: string; channel_id: string }>();
-
-          if (!binding) {
-            console.log(`github_webhook binding_found=false`);
-            return json({ ok: true, skipped: "no binding" });
+          const targets = await getFanoutTargets(env, ghInstallId);
+          if (targets.length === 0) {
+            console.log(`github_webhook fanout_targets=0`);
+            return json({ ok: true, skipped: "no members" });
           }
-          console.log(`github_webhook binding_found=true channel=${binding.channel_id}`);
+          console.log(`github_webhook fanout_targets=${targets.length}`);
 
           const conclusion = wr.conclusion ?? "unknown";
           const repoName = event.repository?.full_name ?? "unknown";
@@ -355,103 +350,125 @@ export default {
           const runUrl = wr.html_url ?? "";
           const priority = conclusion === "success" ? "normal" : "high";
           const title = conclusion === "success" ? "Build completed" : `Build ${conclusion}`;
-          const messageId = `gh-run-${wr.id}`;
           const now = new Date().toISOString();
-
-          await env.DB.prepare(
-            `INSERT INTO messages
-               (id, channel_id, seq, title, message, priority, url,
-                created_at, expires_at, idempotency_key, request_hash,
-                push_status, attempt_count)
-             SELECT ?1, ?2,
-                    COALESCE((SELECT MAX(seq) FROM messages WHERE channel_id = ?2), 0) + 1,
-                    ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0`,
-          )
-            .bind(
-              messageId, binding.channel_id, wr.name ?? "workflow",
-              `${branch} · ${conclusion}`, priority, runUrl || null, now,
-              new Date(Date.now() + 7 * 86400000).toISOString(),
-              messageId, new TextEncoder().encode(messageId).length.toString(16),
-            )
-            .run();
-          console.log(`github_webhook message_created=true channel=${binding.channel_id}`);
-
-          // Echo the allocated seq back to the device: the Android Room inbox
-          // stores (channel_id, seq) and the FCM path reads it for ordering.
-          const allocated = await env.DB.prepare(
-            `SELECT seq FROM messages WHERE id = ?1`,
-          ).bind(messageId).first<{ seq: number }>();
-          const allocatedSeq = allocated?.seq;
-
-          // FCM to the bound device
-          const installation = await env.DB.prepare(
-            `SELECT fcm_token_ciphertext, fcm_token_nonce FROM installations WHERE id = ?1`,
-          ).bind(binding.pigeonhub_installation_id).first<{
-            fcm_token_ciphertext: string;
-            fcm_token_nonce: string;
-          }>();
-          if (!installation) {
-            console.log(`github_webhook push_attempted=false no_installation`);
-            return json({ ok: true, stored: true, push_attempted: false });
-          }
-          let targetToken: string;
-          try {
-            targetToken = await decryptFcmToken(
-              env, installation.fcm_token_ciphertext, installation.fcm_token_nonce,
-            );
-          } catch {
-            console.log(`github_webhook push_attempted=false decrypt_failed`);
-            return json({ ok: true, stored: true, push_attempted: false });
-          }
+          const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
           const access = await getAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY);
 
-          const fcmRes = await fetch(
-            `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${access.token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                message: {
-                  token: targetToken,
-                  data: {
-                    message_id: messageId,
-                    channel_id: binding.channel_id,
-                    ...(allocatedSeq !== undefined && allocatedSeq !== null
-                      ? { seq: String(allocatedSeq) }
-                      : {}),
-                    title: conclusion === "success" ? "Build completed" : `Build ${conclusion}`,
-                    message: `${branch} - ${conclusion}`,
-                    priority: priority,
-                    url: runUrl || "",
-                    sent_at: now,
-                    schema_version: "1",
-                  },
-                  android: { priority: priority === "high" ? "HIGH" : "NORMAL", ttl: "3600s" },
-                },
-              }),
-            },
-          );
+          let stored = 0;
+          let pushed = 0;
+          let skippedStale = 0;
 
-          if (fcmRes.ok) {
-            const fcmJson = await fcmRes.json() as { name?: string };
+          for (const target of targets) {
+            // Per-channel message id: the same run fans out one copy per
+            // device channel, and webhook redelivery of the same run is
+            // absorbed idempotently per channel.
+            const messageId = `gh-run-${wr.id}-${target.channelId}`;
+
+            const existing = await env.DB.prepare(
+              `SELECT id FROM messages WHERE id = ?1`,
+            ).bind(messageId).first<{ id: string }>();
+            if (existing) {
+              stored++;
+              continue;
+            }
+
             await env.DB.prepare(
-              `UPDATE messages SET push_status = 'fcm_accepted', attempt_count = 1,
-                 fcm_message_id = ?2 WHERE id = ?1`,
-            ).bind(messageId, fcmJson.name ?? null).run();
-            console.log(`github_webhook push_result=accepted`);
-          } else {
-            const detail = (await fcmRes.text()).slice(0, 200);
-            const st = fcmRes.status >= 500 ? "pending" : "failed";
-            await env.DB.prepare(
-              `UPDATE messages SET push_status = ?2, attempt_count = 1, last_error = ?3 WHERE id = ?1`,
-            ).bind(messageId, st, `fcm ${fcmRes.status}: ${detail}`).run();
-            console.log(`github_webhook push_result=failed fcm_status=${fcmRes.status}`);
+              `INSERT INTO messages
+                 (id, channel_id, seq, title, message, priority, url,
+                  created_at, expires_at, idempotency_key, request_hash,
+                  push_status, attempt_count)
+               SELECT ?1, ?2,
+                      COALESCE((SELECT MAX(seq) FROM messages WHERE channel_id = ?2), 0) + 1,
+                      ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0`,
+            )
+              .bind(
+                messageId, target.channelId, wr.name ?? "workflow",
+                `${branch} · ${conclusion}`, priority, runUrl || null, now,
+                expiresAt,
+                messageId, new TextEncoder().encode(messageId).length.toString(16),
+              )
+              .run();
+            stored++;
+
+            // Echo the allocated seq back to the device: the Android Room
+            // inbox stores (channel_id, seq) and FCM carries it for ordering.
+            const allocated = await env.DB.prepare(
+              `SELECT seq FROM messages WHERE id = ?1`,
+            ).bind(messageId).first<{ seq: number }>();
+            const allocatedSeq = allocated?.seq;
+
+            const installation = await env.DB.prepare(
+              `SELECT fcm_token_ciphertext, fcm_token_nonce FROM installations WHERE id = ?1`,
+            ).bind(target.pigeonhubInstallationId).first<{
+              fcm_token_ciphertext: string;
+              fcm_token_nonce: string;
+            }>();
+            if (!installation) {
+              console.log(`github_webhook leg=${target.channelId} push_attempted=false no_installation`);
+              continue;
+            }
+            let targetToken: string;
+            try {
+              targetToken = await decryptFcmToken(
+                env, installation.fcm_token_ciphertext, installation.fcm_token_nonce,
+              );
+            } catch {
+              console.log(`github_webhook leg=${target.channelId} push_attempted=false decrypt_failed`);
+              continue;
+            }
+
+            const fcmRes = await fetch(
+              `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${access.token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  message: {
+                    token: targetToken,
+                    data: {
+                      message_id: messageId,
+                      channel_id: target.channelId,
+                      ...(allocatedSeq !== undefined && allocatedSeq !== null
+                        ? { seq: String(allocatedSeq) }
+                        : {}),
+                      title: conclusion === "success" ? "Build completed" : `Build ${conclusion}`,
+                      message: `${branch} - ${conclusion}`,
+                      priority: priority,
+                      url: runUrl || "",
+                      sent_at: now,
+                      schema_version: "1",
+                    },
+                    android: { priority: priority === "high" ? "HIGH" : "NORMAL", ttl: "3600s" },
+                  },
+                }),
+              },
+            );
+
+            if (fcmRes.ok) {
+              const fcmJson = await fcmRes.json() as { name?: string };
+              await env.DB.prepare(
+                `UPDATE messages SET push_status = 'fcm_accepted', attempt_count = 1,
+                   fcm_message_id = ?2 WHERE id = ?1`,
+              ).bind(messageId, fcmJson.name ?? null).run();
+              pushed++;
+              console.log(`github_webhook leg=${target.channelId} push_result=accepted`);
+            } else {
+              const detail = (await fcmRes.text()).slice(0, 200);
+              const st = fcmRes.status >= 500 ? "pending" : "failed";
+              await env.DB.prepare(
+                `UPDATE messages SET push_status = ?2, attempt_count = 1, last_error = ?3 WHERE id = ?1`,
+              ).bind(messageId, st, `fcm ${fcmRes.status}: ${detail}`).run();
+              // A 404/UNREGISTERED leg belongs to a stale device token; it
+              // only excludes that device — the other legs already went out.
+              if (fcmRes.status === 404 || detail.includes("UNREGISTERED")) skippedStale++;
+              console.log(`github_webhook leg=${target.channelId} push_result=failed fcm_status=${fcmRes.status}`);
+            }
           }
 
-          return json({ ok: true, stored: true, pushed: fcmRes.ok });
+          return json({ ok: true, stored, pushed, stale_skipped: skippedStale });
         }
 
         return json({ ok: true });
