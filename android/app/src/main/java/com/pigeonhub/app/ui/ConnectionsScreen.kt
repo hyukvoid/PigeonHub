@@ -37,6 +37,14 @@ import androidx.compose.ui.unit.dp
 import com.pigeonhub.app.R
 import com.pigeonhub.app.push.installation.BootstrapStatus
 import com.pigeonhub.app.push.installation.InstallationRepository
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.layout.size
 
 @Composable
 fun ConnectionsScreen(
@@ -44,6 +52,7 @@ fun ConnectionsScreen(
     showSnackbar: (String) -> Unit,
 ) {
     val installState by InstallationRepository.state.collectAsState()
+    val scope = rememberCoroutineScope()
     val registered = installState.status == BootstrapStatus.REGISTERED
 
     Column(
@@ -130,6 +139,38 @@ fun ConnectionsScreen(
                         FilledTonalButton(onClick = onOpenMyPush) {
                             Text(stringResource(R.string.connections_copy_curl))
                         }
+                    }
+
+                    // Real Worker → D1 → FCM → Android test notification
+                    val context = LocalContext.current
+                    var testBusy by remember { mutableStateOf(false) }
+                    var testResult by remember { mutableStateOf<String?>(null) }
+                    Button(
+                        onClick = {
+                            testBusy = true
+                            testResult = null
+                            scope.launch {
+                                val (ok, detail) = InstallationRepository.sendTestNotification(
+                                    title = "PigeonHub",
+                                    message = "Test notification from your device.",
+                                )
+                                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    testBusy = false
+                                    testResult = if (ok) "전송 완료 — 알림을 확인하세요" else "전송 실패 ($detail)"
+                                }
+                            }
+                        },
+                        enabled = !testBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (testBusy) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text("Test 나에게 보내기")
+                    }
+                    testResult?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
