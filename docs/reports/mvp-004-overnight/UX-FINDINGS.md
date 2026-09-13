@@ -40,4 +40,9 @@ Phase 1 records findings only; fixes land in later phases. Severity: P0 crash / 
 
 ## Phase 2+ findings (during fixes)
 
-(filled as discovered)
+16. **[P1→fixed] "null" URL row** — sync parser wrote the literal string "null" into Room (Phase 1 #1). Fixed in Phase 2 (commit 74b4078): `optStringOrNull` guard at parse time + render-time https filter hides the already-persisted legacy row. Verified on device: row disappeared after rebuild (sync cursor had already passed the row, so the render guard was required).
+17. **[P3→fixed] Cold-start empty-inbox flash** — after process restart (e.g. per-app locale switch), Room flow's `initialValue = emptyList()` rendered "No messages yet" for users who have messages. Artemis caught it during Scenario F: the message "disappeared" after a locale switch, then reappeared. Fixed in c8a4e89: draw nothing until Room's first emission. Verified: message visible immediately after cold start.
+18. **[P3→accepted] Bottom-nav labels wrap at font scale ≥150% in English** ("Connectio ns", "Diagnostic s"). Material 3 `NavigationBarItem` standard behavior; Korean labels (수신함/연결/진단/설정) are short enough not to wrap. Shortening English labels ("Inbox/Ties/Diag") would hurt clarity more; accepted and documented.
+19. **[P4→fixed] Test-send feedback visibility** — result text remains small on purpose, but the localized heads-up notification is the primary feedback path (verified in Scenario B).
+20. **[P3→fixed] Onboarding brand mark invisible** — first attempt placed the adaptive-icon foreground (white glyph) directly on the light background; invisible. Fixed: glyph tinted onPrimaryContainer inside a primaryContainer circle.
+21. **[accepted] Debug-only dev details** stay debug-only: "seq N - via FCM" line and the Diagnostics tab (BuildConfig.DEBUG gated). Release builds never show them.
