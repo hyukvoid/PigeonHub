@@ -14,6 +14,14 @@ import com.pigeonhub.app.data.InboxDatabase
  * Notification policy: posted only when the message is NEW to Room — a delayed
  * or duplicated FCM after a sync never re-notifies and never creates a second
  * row (DEVICE_PUSH_RECEIVED evidence is upgraded on the existing row instead).
+ *
+ * MVP-005/010 Job attention policy: structured Job events are INBOX UPDATES,
+ * not notifications, while the job is in flight (RUNNING/PROGRESS). Terminal
+ * states notify once per (job, state) — DONE on the normal channel,
+ * FAILED/NEEDS_ACTION on the high channel — so progress spam can never reach
+ * the notification shade. Redelivered state events are deduped by a
+ * persistent job-state key, not by message_id (connectors may retry with a
+ * fresh message_id).
  */
 object PushPipeline {
 
@@ -65,6 +73,17 @@ object PushPipeline {
                 runId = data["run_id"],
                 attentionReason = data["attention_reason"],
                 factsJson = data["facts"],
+                jobSource = payload.job?.source,
+                jobId = payload.job?.jobId,
+                jobName = payload.job?.jobName,
+                jobState = payload.job?.state?.name,
+                jobStartedAt = payload.job?.startedAt,
+                jobFinishedAt = payload.job?.finishedAt,
+                jobProgressCurrent = payload.job?.progressCurrent,
+                jobProgressTotal = payload.job?.progressTotal,
+                jobAttentionReason = payload.job?.attentionReason,
+                jobResultSummary = payload.job?.resultSummary,
+                jobDeepLink = payload.job?.deepLink,
             )
         }
 
@@ -74,6 +93,18 @@ object PushPipeline {
         }
 
         parsed.warnings.forEach { Log.w(TAG, "[$source] payload warning: $it") }
+
+        val job = payload.job
+        if (job != null) {
+            val decision = JobAttentionPolicy.shouldNotify(appContext, job)
+            if (!decision.notify) {
+                Log.i(
+                    TAG,
+                    "[$source] job ${job.jobKey} ${job.state} → inbox only (${decision.reason})",
+                )
+                return HandleResult.NotRendered(decision.reason)
+            }
+        }
 
         if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) {
             Log.w(TAG, "[$source] notifications disabled; message kept in Room only")

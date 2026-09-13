@@ -443,6 +443,17 @@ object InstallationRepository {
                     run_id = m.optStringOrNull("run_id"),
                     attention_reason = m.optStringOrNull("attention_reason"),
                     facts_json = m.optStringOrNull("facts_json"),
+                    job_source = m.optStringOrNull("job_source"),
+                    job_id = m.optStringOrNull("job_id"),
+                    job_name = m.optStringOrNull("job_name"),
+                    job_state = m.optStringOrNull("job_state"),
+                    job_started_at = m.optStringOrNull("job_started_at"),
+                    job_finished_at = m.optStringOrNull("job_finished_at"),
+                    job_progress_current = m.optIntOrNull("job_progress_current"),
+                    job_progress_total = m.optIntOrNull("job_progress_total"),
+                    job_attention_reason = m.optStringOrNull("job_attention_reason"),
+                    job_result_summary = m.optStringOrNull("job_result_summary"),
+                    job_deep_link = m.optStringOrNull("job_deep_link"),
                 )
             }
             val next = json.optInt("next_after_seq", after)
@@ -485,3 +496,7 @@ object InstallationRepository {
 /** optString that maps JSON null (and the literal "null" it would return) to Kotlin null. */
 internal fun org.json.JSONObject.optStringOrNull(key: String): String? =
     if (isNull(key)) null else optString(key).ifEmpty { null }
+
+/** optInt that maps JSON null / absent / non-numeric to Kotlin null. */
+internal fun org.json.JSONObject.optIntOrNull(key: String): Int? =
+    if (isNull(key)) null else optInt(key, -1).takeIf { it >= 0 }

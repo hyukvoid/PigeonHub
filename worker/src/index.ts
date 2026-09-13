@@ -12,6 +12,7 @@ import { sendToFcm } from "./fcm.js";
 import { getAccessToken } from "./gcp_auth.js";
 import { canonicalRequestHash } from "./d1.js";
 import { validateAgentEvent, type ValidatedAgentEvent } from "./agent_event.js";
+import { validateJobEvent, type ValidatedJobEvent } from "./jobs.js";
 import { validatePush } from "./validate.js";
 import type { Env, PushRequest, ResolvedPush } from "./types.js";
 import {
@@ -72,6 +73,7 @@ interface PublishContext {
   idempotencyKey: string | null;
   failAt: string | null;
   agent?: ValidatedAgentEvent | null;
+  job?: ValidatedJobEvent | null;
 }
 
 async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> {
@@ -109,7 +111,7 @@ async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> 
   // ---- D1 insert (pending) ----
   let seq: number;
   try {
-    seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey, ctx.agent);
+    seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey, ctx.agent, ctx.job);
   } catch (error) {
     if (error instanceof D1UniqueRace) {
       if (error.indexName === "channel_idem" && ctx.idempotencyKey !== null) {
@@ -121,7 +123,7 @@ async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> 
       }
       // seq allocation raced (should be impossible: D1 serializes writes);
       // retry once with the unique index as the final backstop.
-      seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey, ctx.agent);
+      seq = await insertPendingMessage(env, ctx.channelId, ctx.push, ctx.requestHash, ctx.idempotencyKey, ctx.agent, ctx.job);
     } else {
       // Genuine D1 failure: nothing stored, so FCM must never run.
       return json(
@@ -168,7 +170,7 @@ async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> 
   }
 
   // ---- FCM send ----
-  const sent = await sendToFcm(env, ctx.push, ctx.targetToken, ctx.channelId, seq);
+  const sent = await sendToFcm(env, ctx.push, ctx.targetToken, ctx.channelId, seq, ctx.job);
 
   if (sent.ok) {
     // ---- (D) failure injection between FCM accept and state update ----
@@ -351,6 +353,37 @@ export default {
           const priority = conclusion === "success" ? "normal" : "high";
           const title = conclusion === "success" ? "Build completed" : `Build ${conclusion}`;
           const now = new Date().toISOString();
+
+          // MVP-005: GitHub is the first STRUCTURED job source. A completed
+          // run is one job event; same (source, job_id) updates coalesce into
+          // a single Job Card on the phone.
+          const ghJob = {
+            source: "github",
+            job_id: `run-${wr.id}`,
+            job_name: wr.name ?? repoName,
+            state: conclusion === "failure" || conclusion === "timed_out"
+              ? "FAILED"
+              : conclusion === "cancelled"
+                ? "NEEDS_ACTION"
+                : "DONE",
+            started_at: typeof wr.started_at === "string" ? wr.started_at : null,
+            finished_at: now,
+            attention_reason:
+              conclusion === "cancelled" ? "워크플로우가 취소됐어요 · workflow cancelled" : null,
+            result_summary: `${conclusion} · ${branch}`,
+            deep_link: runUrl || null,
+          };
+          const ghJobData: Record<string, string> = {
+            job_source: ghJob.source,
+            job_id: ghJob.job_id,
+            job_state: ghJob.state,
+            ...(ghJob.job_name ? { job_name: ghJob.job_name } : {}),
+            ...(ghJob.started_at ? { job_started_at: ghJob.started_at } : {}),
+            ...(ghJob.finished_at ? { job_finished_at: ghJob.finished_at } : {}),
+            ...(ghJob.attention_reason ? { job_attention_reason: ghJob.attention_reason } : {}),
+            ...(ghJob.result_summary ? { job_result_summary: ghJob.result_summary } : {}),
+            ...(ghJob.deep_link ? { job_deep_link: ghJob.deep_link } : {}),
+          };
           const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
           const access = await getAccessToken(env.FIREBASE_CLIENT_EMAIL, env.FIREBASE_PRIVATE_KEY);
 
@@ -376,16 +409,22 @@ export default {
               `INSERT INTO messages
                  (id, channel_id, seq, title, message, priority, url,
                   created_at, expires_at, idempotency_key, request_hash,
-                  push_status, attempt_count)
+                  push_status, attempt_count,
+                  job_source, job_id, job_name, job_state, job_started_at,
+                  job_finished_at, job_attention_reason, job_result_summary, job_deep_link)
                SELECT ?1, ?2,
                       COALESCE((SELECT MAX(seq) FROM messages WHERE channel_id = ?2), 0) + 1,
-                      ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0`,
+                      ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0,
+                      ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19`,
             )
               .bind(
                 messageId, target.channelId, wr.name ?? "workflow",
                 `${branch} · ${conclusion}`, priority, runUrl || null, now,
                 expiresAt,
                 messageId, new TextEncoder().encode(messageId).length.toString(16),
+                ghJob.source, ghJob.job_id, ghJob.job_name, ghJob.state,
+                ghJob.started_at, ghJob.finished_at, ghJob.attention_reason,
+                ghJob.result_summary, ghJob.deep_link,
               )
               .run();
             stored++;
@@ -440,6 +479,7 @@ export default {
                       url: runUrl || "",
                       sent_at: now,
                       schema_version: "1",
+                      ...ghJobData,
                     },
                     android: { priority: priority === "high" ? "HIGH" : "NORMAL", ttl: "3600s" },
                   },
@@ -630,7 +670,10 @@ export default {
         const nowIso = new Date().toISOString();
         const rows = await env.DB.prepare(
           `SELECT id, seq, title, message, priority, url, created_at, expires_at,
-                  event_type, provider, run_id, attention_reason, facts_json
+                  event_type, provider, run_id, attention_reason, facts_json,
+                  job_source, job_id, job_name, job_state, job_started_at,
+                  job_finished_at, job_progress_current, job_progress_total,
+                  job_attention_reason, job_result_summary, job_deep_link
            FROM messages
            WHERE channel_id = ?1 AND seq > ?2 AND seq <= ?3 AND expires_at > ?4
            ORDER BY seq ASC LIMIT ?5`,
@@ -758,6 +801,15 @@ export default {
         agent = result.event;
       }
 
+      // MVP-005: optional structured Job layer (validated separately; the
+      // unstructured push fields above are untouched by it).
+      let job: ValidatedJobEvent | null = null;
+      if (body.job !== undefined) {
+        const result = validateJobEvent(body.job);
+        if (!result.ok) return json({ ok: false, errors: result.errors }, 400);
+        job = result.job;
+      }
+
       return durablePublish(env, {
         channelId: channel.id,
         quotaScope: `inst:${installation.id}`,
@@ -772,6 +824,7 @@ export default {
         idempotencyKey,
         failAt,
         agent,
+        job,
       });
     }
 

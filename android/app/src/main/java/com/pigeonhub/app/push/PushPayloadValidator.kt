@@ -76,6 +76,39 @@ object PushPayloadValidator {
             }
         }
 
+        // MVP-005: optional structured Job layer. A payload with a job_source
+        // but missing/unknown job_state is still accepted — the job part is
+        // dropped with a warning rather than losing the message.
+        val jobSource = raw[PushPayload.KEY_JOB_SOURCE]?.trim()?.take(64)?.ifEmpty { null }
+        val job = if (jobSource == null) {
+            null
+        } else {
+            val jobId = raw[PushPayload.KEY_JOB_ID]?.trim()?.take(128)?.ifEmpty { null }
+            val state = JobPayload.State.from(raw[PushPayload.KEY_JOB_STATE])
+            if (jobId == null || state == null) {
+                warnings += "job fields ignored: job_id/state missing or unknown"
+                null
+            } else {
+                JobPayload(
+                    source = jobSource,
+                    jobId = jobId,
+                    jobName = raw[PushPayload.KEY_JOB_NAME]?.trim()?.take(200)?.ifEmpty { null },
+                    state = state,
+                    startedAt = raw[PushPayload.KEY_JOB_STARTED_AT]?.trim()?.take(64)?.ifEmpty { null },
+                    finishedAt = raw[PushPayload.KEY_JOB_FINISHED_AT]?.trim()?.take(64)?.ifEmpty { null },
+                    progressCurrent = raw[PushPayload.KEY_JOB_PROGRESS_CURRENT]?.trim()
+                        ?.take(12)?.toIntOrNull()?.takeIf { it >= 0 },
+                    progressTotal = raw[PushPayload.KEY_JOB_PROGRESS_TOTAL]?.trim()
+                        ?.take(12)?.toIntOrNull()?.takeIf { it >= 0 },
+                    attentionReason = raw[PushPayload.KEY_JOB_ATTENTION_REASON]?.trim()
+                        ?.take(300)?.ifEmpty { null },
+                    resultSummary = raw[PushPayload.KEY_JOB_RESULT_SUMMARY]?.trim()
+                        ?.take(300)?.ifEmpty { null },
+                    deepLink = sanitizeUrl(raw[PushPayload.KEY_JOB_DEEP_LINK], warnings),
+                )
+            }
+        }
+
         return ParseResult.Valid(
             payload = PushPayload(
                 messageId = messageId,
@@ -87,6 +120,7 @@ object PushPayloadValidator {
                 url = url,
                 sentAt = sentAt?.ifEmpty { null },
                 schemaVersion = schemaVersion,
+                job = job,
             ),
             warnings = warnings,
         )

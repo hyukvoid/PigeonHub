@@ -47,6 +47,18 @@ data class InboxMessage(
     val run_id: String? = null,
     val attention_reason: String? = null,
     val facts_json: String? = null,
+    /** Structured Job layer (MVP-005). Null for unstructured messages. */
+    val job_source: String? = null,
+    val job_id: String? = null,
+    val job_name: String? = null,
+    val job_state: String? = null,
+    val job_started_at: String? = null,
+    val job_finished_at: String? = null,
+    val job_progress_current: Int? = null,
+    val job_progress_total: Int? = null,
+    val job_attention_reason: String? = null,
+    val job_result_summary: String? = null,
+    val job_deep_link: String? = null,
     /** Local-only unread state; server sync never overwrites it. */
     val is_read: Boolean = false,
     val read_at: Long? = null,
@@ -71,14 +83,17 @@ abstract class InboxDao {
         "INSERT INTO inbox_messages " +
             "(message_id, channel_id, seq, title, message, priority, url, " +
             "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at, " +
-            "event_type, provider, run_id, attention_reason, facts_json) " +
+            "event_type, provider, run_id, attention_reason, facts_json, " +
+            "job_source, job_id, job_name, job_state, job_started_at, job_finished_at, job_progress_current, job_progress_total, job_attention_reason, job_result_summary, job_deep_link) " +
             "VALUES (:messageId, :channelId, :seq, :title, :message, :priority, :url, " +
             ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, NULL, 0, NULL, " +
-            ":eventType, :provider, :runId, :attentionReason, :factsJson) " +
+            ":eventType, :provider, :runId, :attentionReason, :factsJson, " +
+            ":jobSource, :jobId, :jobName, :jobState, :jobStartedAt, :jobFinishedAt, :jobProgressCurrent, :jobProgressTotal, :jobAttentionReason, :jobResultSummary, :jobDeepLink) " +
             "ON CONFLICT(message_id) DO UPDATE SET " +
             "seq = excluded.seq, " +
             "title = excluded.title, message = excluded.message, priority = excluded.priority, " +
-            "url = excluded.url, expires_at = excluded.expires_at",
+            "url = excluded.url, expires_at = excluded.expires_at, " +
+            "job_source = excluded.job_source, job_id = excluded.job_id, job_name = excluded.job_name, job_state = excluded.job_state, job_started_at = excluded.job_started_at, job_finished_at = excluded.job_finished_at, job_progress_current = excluded.job_progress_current, job_progress_total = excluded.job_progress_total, job_attention_reason = excluded.job_attention_reason, job_result_summary = excluded.job_result_summary, job_deep_link = excluded.job_deep_link",
     )
     abstract fun insertFromSync(
         messageId: String,
@@ -97,6 +112,17 @@ abstract class InboxDao {
         runId: String?,
         attentionReason: String?,
         factsJson: String?,
+        jobSource: String?,
+        jobId: String?,
+        jobName: String?,
+        jobState: String?,
+        jobStartedAt: String?,
+        jobFinishedAt: String?,
+        jobProgressCurrent: Int?,
+        jobProgressTotal: Int?,
+        jobAttentionReason: String?,
+        jobResultSummary: String?,
+        jobDeepLink: String?,
     )
 
     /**
@@ -111,16 +137,19 @@ abstract class InboxDao {
         "INSERT INTO inbox_messages " +
             "(message_id, channel_id, seq, title, message, priority, url, " +
             "created_at, expires_at, received_via, local_received_at, device_received_at, is_read, read_at, " +
-            "event_type, provider, run_id, attention_reason, facts_json) " +
+            "event_type, provider, run_id, attention_reason, facts_json, " +
+            "job_source, job_id, job_name, job_state, job_started_at, job_finished_at, job_progress_current, job_progress_total, job_attention_reason, job_result_summary, job_deep_link) " +
             "VALUES (:messageId, :channelId, " +
             "COALESCE(:seq, -(SELECT COUNT(*) FROM inbox_messages WHERE channel_id = :channelId) - 1), " +
             ":title, :message, :priority, :url, " +
             ":createdAt, :expiresAt, :receivedVia, :localReceivedAt, :deviceReceivedAt, 0, NULL, " +
-            ":eventType, :provider, :runId, :attentionReason, :factsJson) " +
+            ":eventType, :provider, :runId, :attentionReason, :factsJson, " +
+            ":jobSource, :jobId, :jobName, :jobState, :jobStartedAt, :jobFinishedAt, :jobProgressCurrent, :jobProgressTotal, :jobAttentionReason, :jobResultSummary, :jobDeepLink) " +
             "ON CONFLICT(message_id) DO UPDATE SET " +
             "title = excluded.title, message = excluded.message, priority = excluded.priority, " +
             "url = excluded.url, expires_at = excluded.expires_at, " +
-            "device_received_at = COALESCE(inbox_messages.device_received_at, excluded.device_received_at)",
+            "device_received_at = COALESCE(inbox_messages.device_received_at, excluded.device_received_at), " +
+            "job_source = excluded.job_source, job_id = excluded.job_id, job_name = excluded.job_name, job_state = excluded.job_state, job_started_at = excluded.job_started_at, job_finished_at = excluded.job_finished_at, job_progress_current = excluded.job_progress_current, job_progress_total = excluded.job_progress_total, job_attention_reason = excluded.job_attention_reason, job_result_summary = excluded.job_result_summary, job_deep_link = excluded.job_deep_link",
     )
     abstract fun insertFromFcm(
         messageId: String,
@@ -140,6 +169,17 @@ abstract class InboxDao {
         runId: String?,
         attentionReason: String?,
         factsJson: String?,
+        jobSource: String?,
+        jobId: String?,
+        jobName: String?,
+        jobState: String?,
+        jobStartedAt: String?,
+        jobFinishedAt: String?,
+        jobProgressCurrent: Int?,
+        jobProgressTotal: Int?,
+        jobAttentionReason: String?,
+        jobResultSummary: String?,
+        jobDeepLink: String?,
     )
 
     @Query("SELECT * FROM inbox_messages WHERE message_id = :messageId")
@@ -181,6 +221,9 @@ abstract class InboxDao {
                 m.message_id, m.channel_id, m.seq, m.title, m.message, m.priority,
                 m.url, m.created_at, m.expires_at, "SYNC", now,
                 m.event_type, m.provider, m.run_id, m.attention_reason, m.facts_json,
+                m.job_source, m.job_id, m.job_name, m.job_state, m.job_started_at,
+                m.job_finished_at, m.job_progress_current, m.job_progress_total,
+                m.job_attention_reason, m.job_result_summary, m.job_deep_link,
             )
         }
         setSyncState(SyncState(id = 1, last_synced_seq = cursor, last_sync_at = now))
@@ -190,7 +233,7 @@ abstract class InboxDao {
 
 @Database(
     entities = [InboxMessage::class, SyncState::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class InboxDatabase : RoomDatabase() {
@@ -229,6 +272,18 @@ abstract class InboxDatabase : RoomDatabase() {
             }
         }
 
+        /** MVP-005 (v4) → v5: optional structured Job layer. Additive only. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf(
+                    "job_source TEXT", "job_id TEXT", "job_name TEXT", "job_state TEXT",
+                    "job_started_at TEXT", "job_finished_at TEXT",
+                    "job_progress_current INTEGER", "job_progress_total INTEGER",
+                    "job_attention_reason TEXT", "job_result_summary TEXT", "job_deep_link TEXT",
+                ).forEach { col -> db.execSQL("ALTER TABLE inbox_messages ADD COLUMN $col") }
+            }
+        }
+
         fun get(context: Context): InboxDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -236,7 +291,7 @@ abstract class InboxDatabase : RoomDatabase() {
                     InboxDatabase::class.java,
                     "pigeonhub_inbox.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }

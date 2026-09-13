@@ -1,4 +1,5 @@
 import { getAccessToken } from "./gcp_auth.js";
+import { jobFcmData, type JobMeta } from "./jobs.js";
 import type { ResolvedPush } from "./types.js";
 
 /**
@@ -29,6 +30,7 @@ export async function sendToFcm(
   targetToken: string,
   channelId: string,
   seq: number,
+  job?: JobMeta | null,
 ): Promise<FcmSendResult> {
   let accessToken: string;
   let authSource: "cache" | "fresh";
@@ -67,6 +69,7 @@ export async function sendToFcm(
               ...(push.url ? { url: push.url } : {}),
               sent_at: push.sent_at,
               schema_version: push.schema_version,
+              ...jobFcmData(job),
             },
             android: {
               priority: push.priority === "high" ? "HIGH" : "NORMAL",

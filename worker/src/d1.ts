@@ -1,4 +1,5 @@
 import type { Env, ResolvedPush, StoredMessage } from "./types.js";
+import type { JobMeta } from "./jobs.js";
 
 /**
  * D1 durable message core (MVP-001B).
@@ -169,6 +170,7 @@ export async function insertPendingMessage(
   requestHash: string,
   idempotencyKey: string | null,
   agent?: AgentMeta | null,
+  job?: JobMeta | null,
 ): Promise<number> {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MESSAGES_TTL_DAYS * 86_400_000).toISOString();
@@ -178,10 +180,14 @@ export async function insertPendingMessage(
       `INSERT INTO messages
          (id, channel_id, seq, title, message, priority, url,
           created_at, expires_at, idempotency_key, request_hash, push_status, attempt_count,
-          event_type, provider, run_id, event_id, attention_reason, facts_json)
+          event_type, provider, run_id, event_id, attention_reason, facts_json,
+          job_source, job_id, job_name, job_state, job_started_at, job_finished_at,
+          job_progress_current, job_progress_total, job_attention_reason,
+          job_result_summary, job_deep_link)
        SELECT ?1, ?2,
               COALESCE((SELECT MAX(seq) FROM messages WHERE channel_id = ?2), 0) + 1,
-              ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0, ?11, ?12, ?13, ?14, ?15, ?16`,
+              ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', 0, ?11, ?12, ?13, ?14, ?15, ?16,
+              ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27`,
     )
       .bind(
         id,
@@ -212,6 +218,17 @@ export async function insertPendingMessage(
         agent?.eventId ?? null,
         agent?.attentionReason ?? null,
         agent?.factsJson ?? null,
+        job?.source ?? null,
+        job?.job_id ?? null,
+        job?.job_name ?? null,
+        job?.state ?? null,
+        job?.started_at ?? null,
+        job?.finished_at ?? null,
+        job?.progress_current ?? null,
+        job?.progress_total ?? null,
+        job?.attention_reason ?? null,
+        job?.result_summary ?? null,
+        job?.deep_link ?? null,
       )
       .run();
   } catch (error) {
