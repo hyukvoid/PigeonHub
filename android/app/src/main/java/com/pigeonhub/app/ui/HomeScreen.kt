@@ -20,6 +20,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.WifiOff
@@ -33,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,6 +54,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import com.pigeonhub.app.BuildConfig
 import com.pigeonhub.app.data.InboxDatabase
+import com.pigeonhub.app.data.InboxItem
+import com.pigeonhub.app.data.collapseInboxItems
+import com.pigeonhub.app.push.JobPayload
 import com.pigeonhub.app.data.InboxMessage
 import com.pigeonhub.app.push.installation.BootstrapStatus
 import com.pigeonhub.app.push.installation.InstallationRepository
@@ -180,18 +188,29 @@ fun HomeScreen(
             }
 
             // (3)/(4) populated; offline/sync-failure banner already shown above.
-            else -> LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                items(entries.orEmpty(), key = { it.message_id }) { entry ->
-                    EntryCard(
-                        entry = entry,
-                        highlighted = tap?.messageId == entry.message_id,
-                        showSnackbar = showSnackbar,
-                    )
+            else -> {
+                val items = remember(entries) { collapseInboxItems(entries.orEmpty()) }
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    items(items, key = { item ->
+                        when (item) {
+                            is InboxItem.Message -> "m:" + item.entry.message_id
+                            is InboxItem.Job -> "j:" + item.jobKey
+                        }
+                    }) { item ->
+                        when (item) {
+                            is InboxItem.Message -> EntryCard(
+                                entry = item.entry,
+                                highlighted = tap?.messageId == item.entry.message_id,
+                                showSnackbar = showSnackbar,
+                            )
+                            is InboxItem.Job -> JobCard(item = item, showSnackbar = showSnackbar)
+                        }
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
                 }
-                item { Spacer(Modifier.height(16.dp)) }
             }
         }
     }
@@ -307,3 +326,135 @@ private fun EntryCard(
         }
     }
 }
+
+/**
+ * MVP-006: one card per structured job (same source+job_id collapses; the
+ * newest event's state wins). State hierarchy: NEEDS_ACTION and FAILED are
+ * error-colored, RUNNING uses the primary, DONE uses the muted variant.
+ */
+@Composable
+private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit) {
+    val context = LocalContext.current
+    val state = item.state
+    val accent = when (state) {
+        JobPayload.State.NEEDS_ACTION, JobPayload.State.FAILED -> MaterialTheme.colorScheme.error
+        JobPayload.State.DONE -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val stateLabel = stringResource(
+        when (state) {
+            JobPayload.State.DONE -> R.string.job_state_done
+            JobPayload.State.FAILED -> R.string.job_state_failed
+            JobPayload.State.NEEDS_ACTION -> R.string.job_state_needs_action
+            else -> R.string.job_state_running
+        },
+    )
+
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    when (state) {
+                        JobPayload.State.DONE -> Icons.Filled.CheckCircle
+                        JobPayload.State.FAILED -> Icons.Filled.Cancel
+                        JobPayload.State.NEEDS_ACTION -> Icons.Filled.Error
+                        else -> Icons.Filled.Circle
+                    },
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    stateLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (item.updateCount > 1) {
+                    Text(
+                        stringResource(R.string.job_updates_suffix, item.updateCount),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    DateUtils.getRelativeTimeSpanString(item.entry.local_received_at).toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                item.source.replaceFirstChar { it.uppercase() } + " \u00b7 " + item.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+
+            val cur = item.progressCurrent
+            val total = item.progressTotal
+            val detail = buildString {
+                if (cur != null && total != null && total > 0) {
+                    append(String.format("%,d / %,d \u00b7 %d%%", cur, total, cur * 100 / total))
+                } else if (cur != null) {
+                    append(String.format("%,d", cur))
+                } else {
+                    append(item.entry.message)
+                }
+                item.resultSummary?.takeIf { it != item.entry.message }?.let {
+                    if (isNotEmpty()) append("\n")
+                    append(it)
+                }
+                item.attentionReason?.let {
+                    if (isNotEmpty()) append("\n")
+                    append(it)
+                }
+            }
+            Text(detail, style = MaterialTheme.typography.bodyMedium)
+
+            val started = item.startedAt
+            if (state == JobPayload.State.RUNNING && started != null) {
+                val elapsed = runCatching {
+                    android.text.format.DateUtils.getRelativeTimeSpanString(
+                        java.time.OffsetDateTime.parse(started).toInstant().toEpochMilli(),
+                        item.entry.local_received_at,
+                        0L,
+                        android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE,
+                    ).toString()
+                }.getOrNull()
+                if (elapsed != null) {
+                    Text(
+                        stringResource(R.string.job_elapsed, elapsed),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            item.deepLink?.let { url ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        url,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 6.dp),
+                    )
+                    FilledTonalButton(onClick = {
+                        if (!UrlOpener.open(context, url)) showSnackbar(context.getString(R.string.inbox_no_browser))
+                    }) {
+                        Text(stringResource(R.string.inbox_open))
+                    }
+                }
+            }
+        }
+    }
+}
+

@@ -132,6 +132,15 @@
     <string name="settings_appearance_light">Light</string>
     <string name="settings_appearance_dark">Dark</string>
 
+    <!-- Job Inbox (MVP-006) -->
+    <string name="job_state_running">Running</string>
+    <string name="job_state_done">Done</string>
+    <string name="job_state_failed">Failed</string>
+    <string name="job_state_needs_action">Needs action</string>
+    <string name="job_updates_suffix">%1$d updates</string>
+    <string name="job_progress_fraction">%1$s / %2$s</string>
+    <string name="job_elapsed">Elapsed %1$s</string>
+
     <!-- Common -->
     <string name="common_copy">Copy</string>
     <string name="common_copied">Copied</string>

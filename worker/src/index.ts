@@ -369,8 +369,10 @@ export default {
             started_at: typeof wr.started_at === "string" ? wr.started_at : null,
             finished_at: now,
             attention_reason:
-              conclusion === "cancelled" ? "워크플로우가 취소됐어요 · workflow cancelled" : null,
-            result_summary: `${conclusion} · ${branch}`,
+              conclusion === "cancelled" ? "workflow cancelled" : null,
+            // message already carries "branch · conclusion"; a summary line
+            // would duplicate it on the Job Card.
+            result_summary: null,
             deep_link: runUrl || null,
           };
           const ghJobData: Record<string, string> = {
@@ -381,7 +383,6 @@ export default {
             ...(ghJob.started_at ? { job_started_at: ghJob.started_at } : {}),
             ...(ghJob.finished_at ? { job_finished_at: ghJob.finished_at } : {}),
             ...(ghJob.attention_reason ? { job_attention_reason: ghJob.attention_reason } : {}),
-            ...(ghJob.result_summary ? { job_result_summary: ghJob.result_summary } : {}),
             ...(ghJob.deep_link ? { job_deep_link: ghJob.deep_link } : {}),
           };
           const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();

@@ -122,6 +122,15 @@
     <string name="settings_appearance_light">라이트</string>
     <string name="settings_appearance_dark">다크</string>
 
+    <!-- Job Inbox (MVP-006) -->
+    <string name="job_state_running">실행 중</string>
+    <string name="job_state_done">완료</string>
+    <string name="job_state_failed">실패</string>
+    <string name="job_state_needs_action">확인 필요</string>
+    <string name="job_updates_suffix">업데이트 %1$d회</string>
+    <string name="job_progress_fraction">%1$s / %2$s</string>
+    <string name="job_elapsed">%1$s 경과</string>
+
     <string name="common_copy">복사</string>
     <string name="common_copied">복사했어요</string>
     <string name="common_close">닫기</string>
