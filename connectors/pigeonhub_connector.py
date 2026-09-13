@@ -159,12 +159,17 @@ def cmd_comfyui_demo(args):
 
 def cmd_run(args):
     """MVP-008: wrap a local process as a PigeonHub job."""
-    job_name = args.name or " ".join(args.cmd)
+    job_name = args.name or " ".join(args.command)
     job_id = f"cli-{int(time.time())}-{os.getpid()}"
     started = datetime.now(timezone.utc).isoformat()
+    state_path = Path(os.environ.get("PIGEONHUB_STATE", str(CREDENTIALS_PATH.parent / "state.json")))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(
+        {"source": "cli", "job_id": job_id, "job_name": job_name, "started_at": started}
+    ), encoding="utf-8")
     publish_job("cli", job_id, "RUNNING", job_name=job_name, started_at=started,
                 title=f"{job_name}: started", message=" ".join(args.cmd))
-    proc = subprocess.run(args.cmd)
+    proc = subprocess.run(args.command)
     finished = datetime.now(timezone.utc).isoformat()
     if proc.returncode == 0:
         publish_job("cli", job_id, "DONE", job_name=job_name, started_at=started,
@@ -207,7 +212,7 @@ def main():
     sub.add_parser("comfyui-demo", help="ComfyUI connector POC (simulated queue)")
     run = sub.add_parser("run", help="wrap a local command as a job")
     run.add_argument("--name", help="human job name")
-    run.add_argument("cmd", nargs="+", help="command to run")
+    run.add_argument("command", nargs="+", help="command to run")
     prog = sub.add_parser("progress", help="report progress for the running job")
     prog.add_argument("current", type=int)
     prog.add_argument("total", type=int)
@@ -224,6 +229,8 @@ def main():
         cmd_progress(args)
     elif args.cmd == "attention":
         cmd_attention(args)
+    else:
+        parser.error(f"unknown command {args.cmd!r}")
 
 
 if __name__ == "__main__":

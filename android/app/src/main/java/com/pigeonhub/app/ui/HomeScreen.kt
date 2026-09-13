@@ -404,7 +404,7 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit) {
                     if (isNotEmpty()) append("\n")
                     append(it)
                 }
-                item.attentionReason?.let {
+                item.attentionReason?.takeIf { it != item.entry.message }?.let {
                     if (isNotEmpty()) append("\n")
                     append(it)
                 }
