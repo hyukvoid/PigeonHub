@@ -65,4 +65,35 @@ object ApiCodec {
         .put("message", message)
         .put("priority", priority)
         .toString()
+
+    /** MVP-005: structured job event body (optional layer over the push fields). */
+    fun jobBody(
+        title: String,
+        message: String,
+        priority: String,
+        source: String,
+        jobId: String,
+        state: String,
+        jobName: String? = null,
+        progressCurrent: Int? = null,
+        progressTotal: Int? = null,
+        attentionReason: String? = null,
+        resultSummary: String? = null,
+    ): String {
+        val job = JSONObject()
+            .put("source", source)
+            .put("job_id", jobId)
+            .put("state", state)
+        jobName?.let { job.put("job_name", it) }
+        progressCurrent?.let { job.put("progress_current", it) }
+        progressTotal?.let { job.put("progress_total", it) }
+        attentionReason?.let { job.put("attention_reason", it) }
+        resultSummary?.let { job.put("result_summary", it) }
+        return JSONObject()
+            .put("title", title)
+            .put("message", message)
+            .put("priority", priority)
+            .put("job", job)
+            .toString()
+    }
 }

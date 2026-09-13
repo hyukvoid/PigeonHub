@@ -42,6 +42,7 @@ import com.pigeonhub.app.BuildConfig
 import com.pigeonhub.app.push.DevicePrefs
 import com.pigeonhub.app.push.FirebaseGate
 import com.pigeonhub.app.push.NotificationChannels
+import com.pigeonhub.app.push.installation.InstallationRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,7 +73,8 @@ fun DeviceScreen(showSnackbar: (String) -> Unit) {
 
         ChannelsCard()
 
-        TestPushCard(showSnackbar = showSnackbar)
+        JobEventCard(showSnackbar)
+                TestPushCard(showSnackbar = showSnackbar)
 
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -279,6 +281,52 @@ private fun TestPushCard(showSnackbar: (String) -> Unit) {
                 FilledTonalButton(onClick = {
                     showSnackbar(TestPushes.sendDuplicate(context, priority = "normal"))
                 }) { Text("DUPLICATE x2") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JobEventCard(showSnackbar: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+
+    fun send(label: String, jobJson: String?) {
+        busy = true
+        scope.launch {
+            val (ok, detail) = InstallationRepository.sendJobEvent(
+                title = "Job event",
+                message = "debug publish: " + label,
+                jobJson = jobJson,
+            )
+            busy = false
+            showSnackbar((if (ok) "sent: " else "FAILED: ") + label + " (" + detail + ")")
+        }
+    }
+
+    val runningJob = "{\"source\":\"debug\",\"job_id\":\"e2e-1\",\"state\":\"RUNNING\",\"job_name\":\"Debug crawler\",\"started_at\":\"2026-09-14T01:00:00Z\"}"
+    val progressJob = "{\"source\":\"debug\",\"job_id\":\"e2e-1\",\"state\":\"PROGRESS\",\"progress_current\":18431,\"progress_total\":50000}"
+    val doneJob = "{\"source\":\"debug\",\"job_id\":\"e2e-1\",\"state\":\"DONE\",\"finished_at\":\"2026-09-14T01:18:00Z\",\"result_summary\":\"50,000 rows in 18m\"}"
+    val failedJob = "{\"source\":\"debug\",\"job_id\":\"e2e-2\",\"state\":\"FAILED\",\"job_name\":\"Product crawler\",\"attention_reason\":\"HTTP 429\"}"
+    val attentionJob = "{\"source\":\"debug\",\"job_id\":\"e2e-3\",\"state\":\"NEEDS_ACTION\",\"job_name\":\"Migration approval\",\"attention_reason\":\"approve migration\"}"
+
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Job events (MVP-005 E2E)", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Publishes through the REAL worker path (Worker → D1 → FCM → device). RUNNING/PROGRESS are inbox-only; DONE/FAILED/NEEDS_ACTION notify.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = { send("RUNNING", runningJob) }, enabled = !busy) { Text("RUNNING") }
+                FilledTonalButton(onClick = { send("PROGRESS", progressJob) }, enabled = !busy) { Text("PROGRESS") }
+                FilledTonalButton(onClick = { send("DONE", doneJob) }, enabled = !busy) { Text("DONE") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = { send("FAILED", failedJob) }, enabled = !busy) { Text("FAILED") }
+                FilledTonalButton(onClick = { send("NEEDS_ACTION", attentionJob) }, enabled = !busy) { Text("ATTENTION") }
+                FilledTonalButton(onClick = { send("DONE-dup", doneJob) }, enabled = !busy) { Text("DONE dup") }
             }
         }
     }

@@ -306,19 +306,37 @@ object InstallationRepository {
     }
 
     /** Real user-facing publish: device → Worker → D1 → FCM → device. */
-    suspend fun sendTestNotification(title: String, message: String): Pair<Boolean, String> {
+    suspend fun sendTestNotification(title: String, message: String): Pair<Boolean, String> =
+        sendJobEvent(title, message, jobJson = null)
+
+    /**
+     * Publish through the REAL worker path with this device's own credentials.
+     * [jobJson] null = unstructured push (OLD_MESSAGE_COMPAT path); non-null =
+     * a prebuilt "job" object (debug Job-event card, MVP-005 E2E).
+     */
+    suspend fun sendJobEvent(
+        title: String,
+        message: String,
+        jobJson: String?,
+        priority: String = "high",
+    ): Pair<Boolean, String> {
         val state = mutableState.value
         val credentials = currentCredentials
         val endpoint = state.endpoint
         if (state.status != BootstrapStatus.REGISTERED || credentials === null || endpoint === null) {
             return false to "not registered"
         }
+        val body = if (jobJson === null) {
+            ApiCodec.messageBody(title, message, priority)
+        } else {
+            JSONObject(ApiCodec.messageBody(title, message, priority)).put("job", JSONObject(jobJson)).toString()
+        }
         val response = withContext(Dispatchers.IO) {
             WorkerApi.request(
                 method = "POST",
                 url = endpoint,
                 bearer = credentials.writeToken,
-                bodyJson = ApiCodec.messageBody(title, message, "high"),
+                bodyJson = body,
             )
         }
         val json = runCatching { JSONObject(response.body) }.getOrNull()
