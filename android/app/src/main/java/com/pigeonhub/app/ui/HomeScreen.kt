@@ -66,7 +66,10 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val dao = InboxDatabase.get(context).inboxDao()
-    val entries by dao.flowAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    // null = Room hasn't emitted yet (cold start). Rendering the empty state
+    // for this window flashed "no messages" to users with real messages.
+    val entries: List<InboxMessage>? by dao.flowAll()
+        .collectAsStateWithLifecycle(initialValue = null)
     val notificationsEnabled = rememberNotificationsEnabled()
     val syncUi by InstallationRepository.inboxSyncState.collectAsState()
     val registered = InstallationRepository.state.collectAsState().value.status ==
@@ -140,6 +143,9 @@ fun HomeScreen(
         }
 
         when {
+            // (0) Room hasn't emitted yet: draw nothing instead of the empty state.
+            entries == null -> Box(Modifier.fillMaxSize())
+
             // (1) Not configured: onboarding owns the app; this is a defensive state.
             !registered -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -149,7 +155,7 @@ fun HomeScreen(
             }
 
             // (2) Configured but no messages yet.
-            entries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            entries.orEmpty().isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -178,7 +184,7 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                items(entries, key = { it.message_id }) { entry ->
+                items(entries.orEmpty(), key = { it.message_id }) { entry ->
                     EntryCard(
                         entry = entry,
                         highlighted = tap?.messageId == entry.message_id,
