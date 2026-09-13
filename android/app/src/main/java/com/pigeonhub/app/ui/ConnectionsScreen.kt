@@ -160,17 +160,8 @@ fun ConnectionsScreen(
             )
         }
 
-        // ---- AI Agents ----
-        HowToCard(
-            icon = Icons.Outlined.SmartToy,
-            title = stringResource(R.string.ai_agents_title),
-            tagline = stringResource(R.string.ai_agents_tagline),
-            howtoTitle = stringResource(R.string.connections_howto),
-            howtoBody = stringResource(R.string.connections_connect_automation_body),
-            curlLabel = stringResource(R.string.connections_copy_curl),
-            copiedMessage = stringResource(R.string.connections_curl_copied),
-            showSnackbar = showSnackbar,
-        )
+        // ---- AI Agents (MVP-009: hook-based connector) ----
+        AiAgentCard(showSnackbar = showSnackbar)
 
         // ---- ComfyUI (MVP-007 POC) ----
         ComfyUiCard(showSnackbar = showSnackbar)

@@ -151,6 +151,12 @@
     <string name="comfyui_pairing_failed">Failed to issue a pairing code</string>
     <string name="comfyui_pairing_revoked">Pairing codes revoked</string>
 
+    <!-- AI agent connector (MVP-009) -->
+    <string name="agents_howto_body">Add lifecycle hooks to your CLI agent (Claude Code, Codex, …). When the agent starts, waits for you, or finishes, PigeonHub turns that into a job alert.</string>
+    <string name="agents_copy_start">Copy start hook</string>
+    <string name="agents_copy_attention">Copy attention hook</string>
+    <string name="agents_copy_done">Copy stop hook</string>
+
     <!-- Common -->
     <string name="common_copy">Copy</string>
     <string name="common_copied">Copied</string>

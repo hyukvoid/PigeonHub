@@ -141,6 +141,12 @@
     <string name="comfyui_pairing_failed">연결 코드를 만들지 못했어요</string>
     <string name="comfyui_pairing_revoked">연결 코드를 취소했어요</string>
 
+    <!-- AI agent connector (MVP-009) -->
+    <string name="agents_howto_body">CLI 에이전트(Claude Code, Codex 등)에 lifecycle hook을 추가하세요. 에이전트가 시작하거나, 확인을 기다리거나, 끝나면 PigeonHub가 잡 알림으로 바꿔드려요.</string>
+    <string name="agents_copy_start">시작 hook 복사</string>
+    <string name="agents_copy_attention">확인 hook 복사</string>
+    <string name="agents_copy_done">종료 hook 복사</string>
+
     <string name="common_copy">복사</string>
     <string name="common_copied">복사했어요</string>
     <string name="common_close">닫기</string>
