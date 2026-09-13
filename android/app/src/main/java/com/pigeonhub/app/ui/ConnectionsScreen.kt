@@ -172,6 +172,9 @@ fun ConnectionsScreen(
             showSnackbar = showSnackbar,
         )
 
+        // ---- ComfyUI (MVP-007 POC) ----
+        ComfyUiCard(showSnackbar = showSnackbar)
+
         // ---- Custom ----
         HowToCard(
             icon = Icons.Outlined.Api,
@@ -281,7 +284,7 @@ private fun MyPushCard(endpoint: String?, showSnackbar: (String) -> Unit) {
 
 /** Card header: 24dp glyph in a 40dp primary-container circle + title (+ tagline). */
 @Composable
-private fun CardHeader(
+internal fun CardHeader(
     icon: @Composable () -> Unit,
     title: String,
     tagline: String?,

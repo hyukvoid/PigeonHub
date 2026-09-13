@@ -13,6 +13,7 @@ import { getAccessToken } from "./gcp_auth.js";
 import { canonicalRequestHash } from "./d1.js";
 import { validateAgentEvent, type ValidatedAgentEvent } from "./agent_event.js";
 import { validateJobEvent, type ValidatedJobEvent } from "./jobs.js";
+import { issuePairingCode, redeemPairingCode, revokePairingCodes, isValidConnectorToken } from "./pairing.js";
 import { validatePush } from "./validate.js";
 import type { Env, PushRequest, ResolvedPush } from "./types.js";
 import {
@@ -709,6 +710,34 @@ export default {
       });
     }
 
+    // ---- MVP-007: connector pairing (short-lived one-time codes) ----
+    if (url.pathname === "/v1/installations/me/pairing-codes" && request.method === "POST") {
+      return requireInstallation(request, env, async (installation) => {
+        const channel = await getChannelByInstallation(env, installation.id);
+        if (!channel) return json({ ok: false, error: "channel missing" }, 500);
+        const issue = await issuePairingCode(env, installation.id, channel.id);
+        return json({ ok: true, ...issue, ttl_seconds: 600 });
+      });
+    }
+
+    if (url.pathname === "/v1/installations/me/pairing-codes" && request.method === "DELETE") {
+      return requireInstallation(request, env, async (installation) => {
+        const revoked = await revokePairingCodes(env, installation.id);
+        return json({ ok: true, revoked });
+      });
+    }
+
+    // Redeem is intentionally UNGAUTHENTICATED beyond the code itself: the
+    // one-time code IS the credential, and redemption burns it.
+    if (url.pathname === "/v1/pairing/redeem" && request.method === "POST") {
+      const body = await parseJsonBody(request);
+      const code = typeof body?.code === "string" ? body.code : "";
+      if (!code.trim()) return json({ ok: false, error: "code is required" }, 400);
+      const result = await redeemPairingCode(env, url.origin, code);
+      if ("error" in result) return json({ ok: false, error: result.error }, 403);
+      return json({ ok: true, ...result });
+    }
+
     const rotationMatch = /^\/v1\/channels\/([^/]+)\/write-token$/.exec(url.pathname);
     if (rotationMatch && request.method === "PUT") {
       const channelId = decodeURIComponent(rotationMatch[1]);
@@ -766,7 +795,11 @@ export default {
       const channel = await getChannelById(env, channelId);
       if (!channel) return json({ ok: false, error: "not found" }, 404);
       const channelHash = await sha256Hex(writeToken);
-      if (!constantTimeEquals(channel.write_token_hash, channelHash)) {
+      const isDeviceToken = constantTimeEquals(channel.write_token_hash, channelHash);
+      const isConnectorToken = isDeviceToken
+        ? false
+        : await isValidConnectorToken(env, channel.id, channelHash);
+      if (!isDeviceToken && !isConnectorToken) {
         return json({ ok: false, error: "unauthorized" }, 401);
       }
       const installation = await getInstallationById(env, channel.installation_id);

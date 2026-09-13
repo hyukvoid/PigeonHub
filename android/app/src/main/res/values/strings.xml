@@ -141,6 +141,16 @@
     <string name="job_progress_fraction">%1$s / %2$s</string>
     <string name="job_elapsed">Elapsed %1$s</string>
 
+    <!-- ComfyUI connector (MVP-007) -->
+    <string name="comfyui_title">ComfyUI</string>
+    <string name="comfyui_tagline">Get notified when image/video generation finishes</string>
+    <string name="comfyui_connect">Connect</string>
+    <string name="comfyui_pairing_title">Pair ComfyUI connector</string>
+    <string name="comfyui_pairing_hint">Enter this code in the connector on your PC. It is one-time and expires in 10 minutes.</string>
+    <string name="comfyui_pairing_revoke">Revoke code</string>
+    <string name="comfyui_pairing_failed">Failed to issue a pairing code</string>
+    <string name="comfyui_pairing_revoked">Pairing codes revoked</string>
+
     <!-- Common -->
     <string name="common_copy">Copy</string>
     <string name="common_copied">Copied</string>

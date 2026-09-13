@@ -149,6 +149,11 @@ object InstallationRepository {
     @Volatile
     private var currentCredentials: CredentialVault.Credentials? = null
 
+    /** MVP-007: management-secret access for the pairing client (same trust domain). */
+    fun currentCredentialsForApi(): CredentialVault.Credentials? = currentCredentials
+
+    fun workerOrigin(): String = WORKER_ORIGIN
+
     /** message_id of the most recent user-facing test notification (delivery tracking). */
     @Volatile
     var lastTestMessageId: String? = null
