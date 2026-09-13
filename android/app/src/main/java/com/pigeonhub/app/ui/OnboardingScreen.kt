@@ -4,7 +4,11 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pigeonhub.app.R
@@ -87,17 +94,31 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
 
     val fetching = state.status == BootstrapStatus.REGISTERING
 
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
     Column(
         Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Spacer(Modifier.height(28.dp))
+        Box(
+            Modifier
+                .clip(CircleShape)
+                .size(72.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimaryContainer),
+                modifier = Modifier.size(44.dp),
+            )
+        }
         Text(
-            "PigeonHub",
+            stringResource(R.string.onboarding_app_name),
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
         )
@@ -292,7 +313,7 @@ fun OnboardingScreen(showMessage: (String) -> Unit) {
                 CircularProgressIndicator()
             }
         }
-        Spacer(Modifier.height(24.dp))
+    }
     }
 }
 

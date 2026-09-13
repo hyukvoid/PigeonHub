@@ -167,7 +167,7 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
-                    TextButton(onClick = onOpenMyPush) {
+                    Button(onClick = onOpenMyPush) {
                         Text(stringResource(R.string.inbox_empty_cta))
                     }
                 }
