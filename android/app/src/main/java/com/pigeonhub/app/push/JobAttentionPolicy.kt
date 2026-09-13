@@ -49,8 +49,18 @@ object JobAttentionPolicy {
         return Decision(notify = true, reason = "terminal job state ${job.state}")
     }
 
-    /** Context entry point backed by SharedPreferences. */
+    /** Context entry point backed by SharedPreferences; honors user toggles. */
     fun shouldNotify(context: Context, job: JobPayload): Decision {
+        val t = JobAlertPrefs.toggles.value
+        val toggleAllows = when (job.state) {
+            JobPayload.State.DONE -> t.done
+            JobPayload.State.FAILED -> t.failed
+            JobPayload.State.NEEDS_ACTION -> t.attention
+            else -> false
+        }
+        if (!toggleAllows) {
+            return Decision(notify = false, reason = "alert disabled by user")
+        }
         val prefs = context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val store = prefs.all

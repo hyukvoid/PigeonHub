@@ -16,6 +16,7 @@ import com.pigeonhub.app.push.NotificationRenderer
 import com.pigeonhub.app.data.InboxDatabase
 import com.pigeonhub.app.push.installation.InstallationRepository
 import com.pigeonhub.app.ui.Appearance
+import com.pigeonhub.app.push.JobAlertPrefs
 import com.pigeonhub.app.ui.AppearancePrefs
 import com.pigeonhub.app.ui.PigeonHubApp
 import com.pigeonhub.app.ui.TapInfo
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
         NotificationChannels.ensureCreated(this)
         InstallationRepository.start(this)
         AppearancePrefs.load(this)
+        JobAlertPrefs.load(this)
         enableEdgeToEdge()
         setContent {
             val appearance by AppearancePrefs.mode.collectAsState()

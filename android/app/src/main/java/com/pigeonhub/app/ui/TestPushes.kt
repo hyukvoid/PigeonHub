@@ -1,6 +1,7 @@
 package com.pigeonhub.app.ui
 
 import android.content.Context
+import com.pigeonhub.app.push.PushPayload
 import com.pigeonhub.app.push.PushPipeline
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -12,6 +13,30 @@ import java.util.UUID
  * PushPipeline via PigeonMessagingService.
  */
 object TestPushes {
+
+    /** MVP-010: local structured Job event (exercises policy + toggles deterministically). */
+    fun sendJob(context: Context, state: String, jobId: String): String {
+        val result = PushPipeline.handle(
+            context = context,
+            data = mapOf(
+                PushPayload.KEY_MESSAGE_ID to "jobtest-$jobId-$state-${System.currentTimeMillis()}",
+                PushPayload.KEY_TITLE to "Job $state",
+                PushPayload.KEY_MESSAGE to "local structured push",
+                PushPayload.KEY_PRIORITY to "high",
+                PushPayload.KEY_CHANNEL_ID to "dev",
+                PushPayload.KEY_JOB_SOURCE to "localtest",
+                PushPayload.KEY_JOB_ID to jobId,
+                PushPayload.KEY_JOB_STATE to state,
+            ),
+            source = "local-job",
+        )
+        return when (result) {
+            is PushPipeline.HandleResult.Delivered -> "delivered: $state"
+            PushPipeline.HandleResult.Duplicate -> "duplicate absorbed"
+            is PushPipeline.HandleResult.Invalid -> "invalid: ${result.reason}"
+            is PushPipeline.HandleResult.NotRendered -> "inbox only: ${result.reason}"
+        }
+    }
 
     fun send(
         context: Context,

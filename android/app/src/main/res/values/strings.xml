@@ -157,6 +157,12 @@
     <string name="agents_copy_attention">Copy attention hook</string>
     <string name="agents_copy_done">Copy stop hook</string>
 
+    <!-- Job alerts (MVP-010) -->
+    <string name="settings_job_alerts_title">Job alerts</string>
+    <string name="settings_job_alerts_done">Done alerts</string>
+    <string name="settings_job_alerts_failed">Failure alerts</string>
+    <string name="settings_job_alerts_attention">Needs-action alerts</string>
+
     <!-- Common -->
     <string name="common_copy">Copy</string>
     <string name="common_copied">Copied</string>

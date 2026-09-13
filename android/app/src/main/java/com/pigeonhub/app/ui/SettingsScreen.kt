@@ -18,6 +18,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -32,7 +33,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.height
 import com.pigeonhub.app.BuildConfig
 import com.pigeonhub.app.R
+import com.pigeonhub.app.push.JobAlertPrefs
 import com.pigeonhub.app.push.NotificationChannels
+
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .selectable(
+                selected = checked,
+                role = Role.Switch,
+                onClick = { onChange(!checked) },
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
 
 @Composable
 fun SettingsScreen(showSnackbar: (String) -> Unit) {
@@ -96,6 +116,28 @@ fun SettingsScreen(showSnackbar: (String) -> Unit) {
                 }) {
                     Text(stringResource(R.string.channel_high_name))
                 }
+            }
+        }
+
+        ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.settings_job_alerts_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                val alerts by JobAlertPrefs.toggles.collectAsState()
+                SwitchRow(
+                    label = stringResource(R.string.settings_job_alerts_done),
+                    checked = alerts.done,
+                ) { done -> JobAlertPrefs.set(context) { it.copy(done = done) } }
+                SwitchRow(
+                    label = stringResource(R.string.settings_job_alerts_failed),
+                    checked = alerts.failed,
+                ) { failed -> JobAlertPrefs.set(context) { it.copy(failed = failed) } }
+                SwitchRow(
+                    label = stringResource(R.string.settings_job_alerts_attention),
+                    checked = alerts.attention,
+                ) { attention -> JobAlertPrefs.set(context) { it.copy(attention = attention) } }
             }
         }
 

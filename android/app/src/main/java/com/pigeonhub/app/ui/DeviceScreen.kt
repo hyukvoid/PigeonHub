@@ -288,6 +288,7 @@ private fun TestPushCard(showSnackbar: (String) -> Unit) {
 
 @Composable
 private fun JobEventCard(showSnackbar: (String) -> Unit) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
 
@@ -327,6 +328,24 @@ private fun JobEventCard(showSnackbar: (String) -> Unit) {
                 FilledTonalButton(onClick = { send("FAILED", failedJob) }, enabled = !busy) { Text("FAILED") }
                 FilledTonalButton(onClick = { send("NEEDS_ACTION", attentionJob) }, enabled = !busy) { Text("ATTENTION") }
                 FilledTonalButton(onClick = { send("DONE-dup", doneJob) }, enabled = !busy) { Text("DONE dup") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            TestPushes.sendJob(context, "DONE", "toggle-e2e")
+                        }
+                        showSnackbar(result)
+                    }
+                }) { Text("JOB DONE (local)") }
+                FilledTonalButton(onClick = {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            TestPushes.sendJob(context, "PROGRESS", "toggle-e2e")
+                        }
+                        showSnackbar(result)
+                    }
+                }) { Text("JOB PROG (local)") }
             }
         }
     }

@@ -147,6 +147,12 @@
     <string name="agents_copy_attention">확인 hook 복사</string>
     <string name="agents_copy_done">종료 hook 복사</string>
 
+    <!-- Job alerts (MVP-010) -->
+    <string name="settings_job_alerts_title">잡 알림</string>
+    <string name="settings_job_alerts_done">완료 알림</string>
+    <string name="settings_job_alerts_failed">실패 알림</string>
+    <string name="settings_job_alerts_attention">확인 필요 알림</string>
+
     <string name="common_copy">복사</string>
     <string name="common_copied">복사했어요</string>
     <string name="common_close">닫기</string>
