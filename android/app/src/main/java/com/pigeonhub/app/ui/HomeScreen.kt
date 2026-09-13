@@ -457,4 +457,3 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit) {
         }
     }
 }
-

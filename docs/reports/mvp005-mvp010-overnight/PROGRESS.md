@@ -1,12 +1,12 @@
 # MVP-005→010 — PROGRESS
 
 - [x] MVP-005 Structured Job Model — VERIFIED (commit e55a783 + deploy 2a7ad2dc)
-- [ ] MVP-006 Job Inbox UX
-- [ ] MVP-007 ComfyUI Connector POC
-- [ ] MVP-008 Python/CLI Connector
-- [ ] MVP-009 AI Agent Connector
-- [ ] MVP-010 Attention Policy v1
-- [ ] FINAL-REPORT + RESUME.md
+- [x] MVP-006 Job Inbox UX — VERIFIED (e41eac8)
+- [x] MVP-007 ComfyUI Connector POC — VERIFIED pipeline / ComfyUI app DEFERRED (f0b5772)
+- [x] MVP-008 Python/CLI Connector — VERIFIED (f6519ce)
+- [x] MVP-009 AI Agent Connector — VERIFIED contract, real claude hook fired (09acc9b)
+- [x] MVP-010 Attention Policy v1 — VERIFIED (4473f6a)
+- [x] FINAL-REPORT + RESUME.md
 
 ## Milestone log
 
