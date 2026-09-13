@@ -70,8 +70,12 @@
     <string name="connections_connect_automation_title">Connect an automation</string>
     <string name="connections_connect_automation_body">Send a message from any script, CI job, or terminal: copy your endpoint and send key, then make a POST request. Or start from the GitHub Actions example below.</string>
     <string name="connections_gh_actions_example">GitHub Actions example</string>
+    <string name="connections_howto">How to connect</string>
+    <string name="connections_endpoint_copied">Endpoint copied</string>
+    <string name="connections_curl_copied">cURL copied to clipboard</string>
 
     <!-- GitHub connection -->
+    <string name="github_manage">Manage on GitHub</string>
     <string name="github_title">GitHub</string>
     <string name="github_tagline">Get build alerts</string>
     <string name="github_connect">Connect</string>
