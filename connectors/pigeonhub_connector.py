@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import subprocess
+import re
 import sys
 import time
 import urllib.error
@@ -58,8 +59,38 @@ def http_json(url, payload=None, bearer=None, method=None):
             return e.code, {"raw": body[:300]}
 
 
+PAIRING_CODE_RE = re.compile(r"PHC-[2-9A-HJKMNP-TV-Z]{5}-[2-9A-HJKMNP-TV-Z]{5}-[2-9A-HJKMNP-TV-Z]{5}")
+
+
+def read_pairing_code_from_image(path):
+    """MVP-013: decode a pairing QR from a phone screenshot / photo.
+
+    The QR carries the one-time pairing code only — never a long-lived
+    credential — so a leaked screenshot expires within 10 minutes anyway.
+    Requires the optional zxing-cpp package (pip install zxing-cpp).
+    """
+    try:
+        import zxingcpp
+    except ImportError:
+        sys.exit("QR scanning needs zxing-cpp:  pip install zxing-cpp  (or type the code instead)")
+    from PIL import Image
+    results = zxingcpp.read_barcodes(Image.open(path))
+    for r in results:
+        m = PAIRING_CODE_RE.search(r.text)
+        if m:
+            return m.group(0)
+    return None
+
+
 def cmd_pair(args):
-    code = input("Pairing code from the PigeonHub app (e.g. PHC-XXXXX-XXXXX-XXXXX): ").strip()
+    if args.qr_image:
+        code = read_pairing_code_from_image(args.qr_image)
+        if not code:
+            sys.exit(f"No PigeonHub pairing code found in {args.qr_image}")
+    elif args.code:
+        code = args.code.strip()
+    else:
+        code = input("Pairing code from the PigeonHub app (e.g. PHC-XXXXX-XXXXX-XXXXX): ").strip()
     status, body = http_json(
         "https://pigeonhub-push.pigeonhub.workers.dev/v1/pairing/redeem", {"code": code}
     )
@@ -208,7 +239,9 @@ def cmd_attention(args):
 def main():
     parser = argparse.ArgumentParser(description="PigeonHub connector")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("pair", help="pair with the phone using a one-time code")
+    pair = sub.add_parser("pair", help="pair with the phone using a one-time code")
+    pair.add_argument("--code", help="pairing code (non-interactive)")
+    pair.add_argument("--qr-image", help="path to a screenshot/photo containing the QR shown on the phone")
     sub.add_parser("comfyui-demo", help="ComfyUI connector POC (simulated queue)")
     run = sub.add_parser("run", help="wrap a local command as a job")
     run.add_argument("--name", help="human job name")

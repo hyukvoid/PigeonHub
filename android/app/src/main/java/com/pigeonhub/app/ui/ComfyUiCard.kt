@@ -98,7 +98,11 @@ fun ComfyUiCard(showSnackbar: (String) -> Unit) {
             onDismissRequest = { showDialog = false },
             title = { Text(stringResource(R.string.comfyui_pairing_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    QrCode(payload = issuedCode!!)
                     Text(
                         stringResource(R.string.comfyui_pairing_hint),
                         style = MaterialTheme.typography.bodyMedium,

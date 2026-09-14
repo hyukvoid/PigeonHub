@@ -74,6 +74,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    implementation(libs.zxing.core)
+
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.ui.tooling)
 }

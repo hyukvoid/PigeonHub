@@ -73,3 +73,31 @@ deps; no new requirements for real users):
 | Android card | source renders `ComfyUI ·` (displaySource fix); FAILED attention reason readable |
 
 Evidence: `evidence/mvp012_comfyui_cards.png`, `evidence/mvp012_comfyui_final.png`.
+
+---
+
+## MVP-013 QR Pairing (2026-09-15) — VERIFIED
+
+**Design (platform-appropriate direction)**: phone displays the QR (pairing happens on
+the PC — the PC is the machine that redeems). QR carries ONLY the one-time PHC code —
+never long-term credentials; a leaked screenshot expires within the 10-minute TTL and
+is single-use anyway.
+
+- Android: `QrCode.kt` renders the code via zxing core (pure-Java, no transitive
+  deps — the only new app dependency); shown in the existing pairing dialog.
+- PC: `connector pair --qr-image <screenshot/photo>` decodes with zxing-cpp
+  (pip, optional; typed code + `--code` remain first-class fallbacks). Regex
+  extracts PHC-… so QR payload formatting can evolve.
+
+**Gates:**
+| Gate | Evidence |
+|------|----------|
+| QR_RENDER | dialog screenshot `evidence/mvp013_qr_dialog.png` |
+| PAIR_SUCCESS (from QR!) | `connector pair --qr-image` decoded the screenshot → "Paired with channel ch_80983…" |
+| ONE_TIME / REPLAY_REJECT | same QR re-paired → HTTP 403 "pairing code already used"; protocol test PASS |
+| EXPIRY | protocol test (own row expired via D1, test data only) → 403 "pairing code expired" |
+| REVOKE | phone "Revoke code" + protocol test → 403 "pairing code revoked" |
+| REPAIR | fresh code after replay/revoke/expiry pairs cleanly + token publishes; protocol test PASS |
+| CONNECTOR_TOKEN_PUBLISH | minted pct_ token published real jobs (QR pair check → phone card) |
+
+Protocol suite: `worker/scripts/pairing_test.mjs` — 6/6 PASS against the deployed worker.
