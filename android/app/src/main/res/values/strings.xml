@@ -163,6 +163,23 @@
     <string name="settings_job_alerts_failed">Failure alerts</string>
     <string name="settings_job_alerts_attention">Needs-action alerts</string>
 
+    <!-- Relative time (MVP-011.5A) -->
+    <string name="time_just_now">just now</string>
+    <string name="time_minutes_ago">%1$d minutes ago</string>
+    <string name="time_hours_ago">%1$d hours ago</string>
+    <string name="time_yesterday">yesterday</string>
+    <string name="time_days_ago">%1$d days ago</string>
+
+    <!-- Inbox delete (MVP-011.5B/C) -->
+    <string name="inbox_delete_action">Delete</string>
+    <string name="inbox_deleted_one">Message deleted</string>
+    <string name="inbox_deleted_all">All messages deleted</string>
+    <string name="inbox_delete_failed">Delete failed</string>
+    <string name="inbox_delete_all_menu">Delete all messages</string>
+    <string name="inbox_delete_all_title">Delete all messages?</string>
+    <string name="inbox_delete_all_body">Every message in your inbox will be removed.</string>
+    <string name="inbox_delete_all_confirm">Delete all</string>
+
     <!-- Common -->
     <string name="common_copy">Copy</string>
     <string name="common_copied">Copied</string>

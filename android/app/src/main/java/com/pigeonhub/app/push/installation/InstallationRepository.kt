@@ -377,6 +377,27 @@ object InstallationRepository {
         return json.optBoolean("connected") to connectedAt
     }
 
+    /**
+     * MVP-011.5: durable deletion. The server tombstones the ids FIRST; the
+     * caller removes local rows only after this succeeds, so a deleted item
+     * can never resurface from a later sync.
+     */
+    suspend fun deleteMessages(messageIds: List<String>): Boolean {
+        val state = mutableState.value
+        val credentials = currentCredentials
+        if (state.status != BootstrapStatus.REGISTERED || credentials === null) return false
+        if (messageIds.isEmpty()) return true
+        val response = withContext(Dispatchers.IO) {
+            WorkerApi.request(
+                method = "POST",
+                url = "$WORKER_ORIGIN/v1/installations/me/messages/delete",
+                bearer = credentials.managementSecret,
+                bodyJson = JSONObject().put("message_ids", org.json.JSONArray(messageIds)).toString(),
+            )
+        }
+        return response.code in 200..299
+    }
+
     fun buildCurl(title: String = "Hello", message: String = "PigeonHub works"): String? {
         val state = mutableState.value
         val credentials = currentCredentials
@@ -442,6 +463,14 @@ object InstallationRepository {
             }
             val json = JSONObject(response.body)
             if (snapshot === null) snapshot = json.optInt("snapshot_max_seq", 0)
+            // MVP-011.5: converge deletions — ids the server tombstoned (from
+            // THIS or another device) are removed locally on every sync.
+            val deletedIds = json.optJSONArray("deleted_ids")
+            if (deletedIds != null && deletedIds.length() > 0) {
+                val ids = (0 until deletedIds.length()).map { deletedIds.getString(it) }
+                dao.deleteByMessageIds(ids)
+                Log.i(TAG, "sync applied ${ids.size} tombstone(s)")
+            }
             val arr = json.optJSONArray("messages") ?: org.json.JSONArray()
             val now = System.currentTimeMillis()
             val page = (0 until arr.length()).map { i ->

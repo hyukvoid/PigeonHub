@@ -68,3 +68,5 @@ worker/.automation-credentials.json
 
 # local-only test credentials
 .test-invite-current
+tools/comfyui/
+tools/comfyui-venv/

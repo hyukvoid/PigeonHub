@@ -669,8 +669,22 @@ export default {
         }
 
         // Read-only: GET never mutates message state (no read receipts here).
-        // Expired messages are excluded; physical deletion is MVP-001E.
+        // Expired messages are excluded; user-deleted (tombstoned) messages are
+        // excluded and reported so every device converges to deleted (MVP-011.5).
         const nowIso = new Date().toISOString();
+        const tombstoneSince = new Date(Date.now() - 30 * 86_400_000).toISOString();
+        const deletedIds = await env.DB.prepare(
+          `SELECT message_id FROM deleted_messages
+           WHERE channel_id = ?1 AND deleted_at >= ?2 ORDER BY deleted_at DESC LIMIT 1000`,
+        )
+          .bind(channel.id, tombstoneSince)
+          .all<{ message_id: string }>();
+        const deletedIdList = (deletedIds.results ?? []).map((r) => r.message_id);
+        // Reuses the bound ?1 (channel id) — no string interpolation.
+        const tombstoneFilter =
+          deletedIdList.length > 0
+            ? " AND id NOT IN (SELECT message_id FROM deleted_messages WHERE channel_id = ?1)"
+            : "";
         const rows = await env.DB.prepare(
           `SELECT id, seq, title, message, priority, url, created_at, expires_at,
                   event_type, provider, run_id, attention_reason, facts_json,
@@ -678,7 +692,7 @@ export default {
                   job_finished_at, job_progress_current, job_progress_total,
                   job_attention_reason, job_result_summary, job_deep_link
            FROM messages
-           WHERE channel_id = ?1 AND seq > ?2 AND seq <= ?3 AND expires_at > ?4
+           WHERE channel_id = ?1 AND seq > ?2 AND seq <= ?3 AND expires_at > ?4${tombstoneFilter}
            ORDER BY seq ASC LIMIT ?5`,
         )
           .bind(channel.id, afterSeq, snapshotMaxSeq, nowIso, limit + 1)
@@ -702,6 +716,7 @@ export default {
 
         return json({
           messages: page,
+          deleted_ids: deletedIdList,
           next_after_seq: nextAfterSeq,
           snapshot_max_seq: snapshotMaxSeq,
           has_more: hasMore,
@@ -737,6 +752,45 @@ export default {
       const result = await redeemPairingCode(env, url.origin, code);
       if ("error" in result) return json({ ok: false, error: result.error }, 403);
       return json({ ok: true, ...result });
+    }
+
+    // ---- MVP-011.5: durable inbox deletion (tombstones, additive) ----
+    if (url.pathname === "/v1/installations/me/messages/delete" && request.method === "POST") {
+      return requireInstallation(request, env, async (installation) => {
+        const channel = await getChannelByInstallation(env, installation.id);
+        if (!channel) return json({ ok: false, error: "channel missing" }, 500);
+        const body = await parseJsonBody(request);
+        const rawIds = body?.message_ids;
+        if (!Array.isArray(rawIds) || rawIds.length === 0) {
+          return json({ ok: false, error: "message_ids must be a non-empty array" }, 400);
+        }
+        if (rawIds.length > 1000) {
+          return json({ ok: false, error: "too many message_ids (max 1000)" }, 400);
+        }
+        const ids = rawIds.filter(
+          (v): v is string => typeof v === "string" && v.length > 0 && v.length <= 256,
+        );
+        if (ids.length === 0) {
+          return json({ ok: false, error: "no valid message_ids" }, 400);
+        }
+        const nowIso = new Date().toISOString();
+        // Tombstones first (idempotent), then the message rows for THIS channel,
+        // in one D1 batch (= one transaction). Seq holes are fine: allocation is
+        // MAX(seq)+1 and the tombstone keeps the id from ever resurfacing on any
+        // device. Multi-row insert goes through json_each — D1 cannot bind a
+        // nested array as a VALUES row set.
+        await env.DB.batch([
+          env.DB.prepare(
+            `INSERT OR IGNORE INTO deleted_messages (channel_id, message_id, deleted_at)
+             SELECT ?1, value, ?2 FROM json_each(?3)`,
+          ).bind(channel.id, nowIso, JSON.stringify(ids)),
+          env.DB.prepare(
+            `DELETE FROM messages
+             WHERE channel_id = ?1 AND id IN (SELECT value FROM json_each(?2))`,
+          ).bind(channel.id, JSON.stringify(ids)),
+        ]);
+        return json({ ok: true, deleted: ids.length });
+      });
     }
 
     const rotationMatch = /^\/v1\/channels\/([^/]+)\/write-token$/.exec(url.pathname);

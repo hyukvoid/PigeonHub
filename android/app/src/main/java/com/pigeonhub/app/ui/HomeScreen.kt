@@ -18,13 +18,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AssistChip
@@ -37,8 +48,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +66,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import android.text.format.DateUtils
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import com.pigeonhub.app.BuildConfig
 import com.pigeonhub.app.data.InboxDatabase
@@ -89,6 +111,36 @@ fun HomeScreen(
         showSnackbar(context.getString(if (granted) R.string.inbox_notifications_enabled else R.string.inbox_permission_denied))
     }
 
+    // MVP-011.5A: ticks every 60s while resumed; also jumps on fg return.
+    val now = rememberTickingNow()
+
+    // MVP-011.5B/C: durable delete. Server tombstone first, local rows after.
+    val scope = rememberCoroutineScope()
+    var deleteMenuOpen by remember { mutableStateOf(false) }
+    var confirmDeleteAll by remember { mutableStateOf(false) }
+    val deletedOneMsg = stringResource(R.string.inbox_deleted_one)
+    val deletedAllMsg = stringResource(R.string.inbox_deleted_all)
+    val deleteFailedMsg = stringResource(R.string.inbox_delete_failed)
+    val displayItems = remember(entries) { entries?.let { collapseInboxItems(it) } }
+    var swipeResetEpoch by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+
+    fun performDelete(messageIds: List<String>, onFailureRestore: (() -> Unit)? = null) {
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                InstallationRepository.deleteMessages(messageIds)
+            }
+            if (ok) {
+                withContext(Dispatchers.IO) {
+                    InboxDatabase.get(context).inboxDao().deleteByMessageIds(messageIds)
+                }
+                showSnackbar(if (messageIds.size == 1) deletedOneMsg else deletedAllMsg)
+            } else {
+                onFailureRestore?.invoke()
+                showSnackbar(deleteFailedMsg)
+            }
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -109,6 +161,21 @@ fun HomeScreen(
             if (syncUi.busy) {
                 CircularProgressIndicator(Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
+            }
+            IconButton(
+                onClick = { deleteMenuOpen = true },
+                enabled = !entries.isNullOrEmpty(),
+            ) {
+                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.inbox_delete_all_menu))
+            }
+            DropdownMenu(expanded = deleteMenuOpen, onDismissRequest = { deleteMenuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.inbox_delete_all_menu)) },
+                    onClick = {
+                        deleteMenuOpen = false
+                        confirmDeleteAll = true
+                    },
+                )
             }
             FilledTonalButton(onClick = {
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -150,6 +217,31 @@ fun HomeScreen(
             Spacer(Modifier.height(12.dp))
         }
 
+        if (confirmDeleteAll) {
+            AlertDialog(
+                onDismissRequest = { confirmDeleteAll = false },
+                title = { Text(stringResource(R.string.inbox_delete_all_title)) },
+                text = { Text(stringResource(R.string.inbox_delete_all_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmDeleteAll = false
+                        val ids = displayItems.orEmpty().flatMap { item ->
+                            when (item) {
+                                is InboxItem.Message -> listOf(item.entry.message_id)
+                                is InboxItem.Job -> item.events.map { it.message_id }
+                            }
+                        }
+                        performDelete(ids)
+                    }) { Text(stringResource(R.string.inbox_delete_all_confirm)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDeleteAll = false }) {
+                        Text(stringResource(R.string.common_close))
+                    }
+                },
+            )
+        }
+
         when {
             // (0) Room hasn't emitted yet: draw nothing instead of the empty state.
             entries == null -> Box(Modifier.fillMaxSize())
@@ -189,24 +281,70 @@ fun HomeScreen(
 
             // (3)/(4) populated; offline/sync-failure banner already shown above.
             else -> {
-                val items = remember(entries) { collapseInboxItems(entries.orEmpty()) }
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    items(items, key = { item ->
+                    items(displayItems.orEmpty(), key = { item ->
                         when (item) {
                             is InboxItem.Message -> "m:" + item.entry.message_id
                             is InboxItem.Job -> "j:" + item.jobKey
                         }
                     }) { item ->
-                        when (item) {
-                            is InboxItem.Message -> EntryCard(
-                                entry = item.entry,
-                                highlighted = tap?.messageId == item.entry.message_id,
-                                showSnackbar = showSnackbar,
-                            )
-                            is InboxItem.Job -> JobCard(item = item, showSnackbar = showSnackbar)
+                        val ids = when (item) {
+                            is InboxItem.Message -> listOf(item.entry.message_id)
+                            is InboxItem.Job -> item.events.map { it.message_id }
+                        }
+                        val currentIds by rememberUpdatedState(ids)
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { value ->
+                                if (value == SwipeToDismissBoxValue.EndToStart) {
+                                    performDelete(currentIds) { swipeResetEpoch++ }
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
+                        )
+                        // Server refused the delete: snap the swiped row back
+                        // so a failed delete never leaves an invisible gap.
+                        LaunchedEffect(swipeResetEpoch) {
+                            if (swipeResetEpoch > 0) {
+                                dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+                            }
+                        }
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = false,
+                            backgroundContent = {
+                                Row(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 24.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = stringResource(R.string.inbox_delete_action),
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                }
+                            },
+                        ) {
+                            when (item) {
+                                is InboxItem.Message -> EntryCard(
+                                    entry = item.entry,
+                                    highlighted = tap?.messageId == item.entry.message_id,
+                                    showSnackbar = showSnackbar,
+                                    now = now,
+                                )
+                                is InboxItem.Job -> JobCard(
+                                    item = item,
+                                    showSnackbar = showSnackbar,
+                                    now = now,
+                                )
+                            }
                         }
                     }
                     item { Spacer(Modifier.height(16.dp)) }
@@ -246,6 +384,7 @@ private fun EntryCard(
     entry: InboxMessage,
     highlighted: Boolean,
     showSnackbar: (String) -> Unit,
+    now: Long,
 ) {
     val context = LocalContext.current
     val containerModifier = if (highlighted) {
@@ -275,7 +414,7 @@ private fun EntryCard(
                 }
                 Spacer(Modifier.weight(1f))
                 Text(
-                    DateUtils.getRelativeTimeSpanString(entry.local_received_at).toString(),
+                    relativeLabel(entry.local_received_at, now),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -333,7 +472,7 @@ private fun EntryCard(
  * error-colored, RUNNING uses the primary, DONE uses the muted variant.
  */
 @Composable
-private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit) {
+private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit, now: Long) {
     val context = LocalContext.current
     val state = item.state
     val accent = when (state) {
@@ -379,7 +518,7 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit) {
                 }
                 Spacer(Modifier.weight(1f))
                 Text(
-                    DateUtils.getRelativeTimeSpanString(item.entry.local_received_at).toString(),
+                    relativeLabel(item.entry.local_received_at, now),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -416,7 +555,7 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit) {
                 val elapsed = runCatching {
                     android.text.format.DateUtils.getRelativeTimeSpanString(
                         java.time.OffsetDateTime.parse(started).toInstant().toEpochMilli(),
-                        item.entry.local_received_at,
+                        now,
                         0L,
                         android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE,
                     ).toString()
@@ -455,5 +594,37 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * MVP-011.5A: the current wall clock, refreshed every [intervalMs] while this
+ * screen is resumed and immediately on background->foreground return. Relative
+ * labels are derived from THIS value + the stored message timestamp — the
+ * formatted string is never persisted, so it can never go stale.
+ */
+@Composable
+private fun rememberTickingNow(intervalMs: Long = 60_000L): Long {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            now = System.currentTimeMillis()
+            while (true) {
+                delay(intervalMs)
+                now = System.currentTimeMillis()
+            }
+        }
+    }
+    return now
+}
+
+@Composable
+private fun relativeLabel(timestampMs: Long, nowMs: Long): String {
+    val time = RelativeTime.compute(timestampMs, nowMs)
+    return if (time is RelativeTime.JustNow || time is RelativeTime.Yesterday) {
+        stringResource(RelativeTime.labelRes(time))
+    } else {
+        stringResource(RelativeTime.labelRes(time), RelativeTime.countArg(time))
     }
 }

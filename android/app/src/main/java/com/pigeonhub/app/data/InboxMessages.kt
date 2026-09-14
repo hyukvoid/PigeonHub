@@ -191,6 +191,10 @@ abstract class InboxDao {
     @Query("SELECT COUNT(*) FROM inbox_messages")
     abstract fun count(): Int
 
+    /** MVP-011.5: local deletion. Server tombstones (sync) prevent resurrection. */
+    @Query("DELETE FROM inbox_messages WHERE message_id IN (:messageIds)")
+    abstract fun deleteByMessageIds(messageIds: List<String>)
+
     @Query(
         "UPDATE inbox_messages SET is_read = 1, read_at = :at " +
             "WHERE message_id = :messageId AND is_read = 0",
