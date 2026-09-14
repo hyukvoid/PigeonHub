@@ -15,7 +15,7 @@
     "QUOTA_MINUTE_LIMIT": "5",
     "GLOBAL_DAILY_LIMIT": "1000",
     // Beta gate: maximum registered installations (bootstrap rejects beyond this).
-    "BETA_MAX_INSTALLATIONS": "20",
+    "BETA_MAX_INSTALLATIONS": "40",
     "GITHUB_APP_SLUG": "pigeonhub-dev"
     // Free-tier kill switch: set PUBLISH_KILL_SWITCH = "on" here (or as a secret)
     // to globally disable publishing without touching code.

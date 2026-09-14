@@ -70,3 +70,4 @@ worker/.automation-credentials.json
 .test-invite-current
 tools/comfyui/
 tools/comfyui-venv/
+ui.xml
