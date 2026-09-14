@@ -217,14 +217,30 @@ abstract class InboxDao {
     open fun commitPage(messages: List<InboxMessage>, cursor: Int, truncated: Boolean) {
         val now = System.currentTimeMillis()
         messages.forEach { m ->
-            insertFromSync(
-                m.message_id, m.channel_id, m.seq, m.title, m.message, m.priority,
-                m.url, m.created_at, m.expires_at, "SYNC", now,
-                m.event_type, m.provider, m.run_id, m.attention_reason, m.facts_json,
-                m.job_source, m.job_id, m.job_name, m.job_state, m.job_started_at,
-                m.job_finished_at, m.job_progress_current, m.job_progress_total,
-                m.job_attention_reason, m.job_result_summary, m.job_deep_link,
-            )
+            try {
+                insertFromSync(
+                    m.message_id, m.channel_id, m.seq, m.title, m.message, m.priority,
+                    m.url, m.created_at, m.expires_at, "SYNC", now,
+                    m.event_type, m.provider, m.run_id, m.attention_reason, m.facts_json,
+                    m.job_source, m.job_id, m.job_name, m.job_state, m.job_started_at,
+                    m.job_finished_at, m.job_progress_current, m.job_progress_total,
+                    m.job_attention_reason, m.job_result_summary, m.job_deep_link,
+                )
+            } catch (e: android.database.sqlite.SQLiteConstraintException) {
+                // (channel, seq) collision with a locally-known row the server no
+                // longer agrees with (drift/pruned rows): keep THIS message on a
+                // reserved negative seq; the upsert's ON CONFLICT restores the
+                // canonical server seq on the next sync.
+                val reserved = -(System.currentTimeMillis() % 1_000_000_000L).toInt() - 1
+                insertFromSync(
+                    m.message_id, m.channel_id, reserved, m.title, m.message, m.priority,
+                    m.url, m.created_at, m.expires_at, "SYNC", now,
+                    m.event_type, m.provider, m.run_id, m.attention_reason, m.facts_json,
+                    m.job_source, m.job_id, m.job_name, m.job_state, m.job_started_at,
+                    m.job_finished_at, m.job_progress_current, m.job_progress_total,
+                    m.job_attention_reason, m.job_result_summary, m.job_deep_link,
+                )
+            }
         }
         setSyncState(SyncState(id = 1, last_synced_seq = cursor, last_sync_at = now))
         setHistoryTruncated(truncated)

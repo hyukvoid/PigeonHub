@@ -55,7 +55,8 @@ object PushPipeline {
         // Realtime delivery: records device_received_at (first callback wins;
         // a sync-first row is upgraded with delivery evidence, never duplicated).
         db.runInTransaction {
-            dao.insertFromFcm(
+            val insert = { seq: Int? ->
+                dao.insertFromFcm(
                 messageId = payload.messageId,
                 channelId = payload.channelId ?: "dev",
                 seq = payload.seq,
@@ -73,18 +74,28 @@ object PushPipeline {
                 runId = data["run_id"],
                 attentionReason = data["attention_reason"],
                 factsJson = data["facts"],
-                jobSource = payload.job?.source,
-                jobId = payload.job?.jobId,
-                jobName = payload.job?.jobName,
-                jobState = payload.job?.state?.name,
-                jobStartedAt = payload.job?.startedAt,
-                jobFinishedAt = payload.job?.finishedAt,
-                jobProgressCurrent = payload.job?.progressCurrent,
-                jobProgressTotal = payload.job?.progressTotal,
-                jobAttentionReason = payload.job?.attentionReason,
-                jobResultSummary = payload.job?.resultSummary,
-                jobDeepLink = payload.job?.deepLink,
-            )
+                    jobSource = payload.job?.source,
+                    jobId = payload.job?.jobId,
+                    jobName = payload.job?.jobName,
+                    jobState = payload.job?.state?.name,
+                    jobStartedAt = payload.job?.startedAt,
+                    jobFinishedAt = payload.job?.finishedAt,
+                    jobProgressCurrent = payload.job?.progressCurrent,
+                    jobProgressTotal = payload.job?.progressTotal,
+                    jobAttentionReason = payload.job?.attentionReason,
+                    jobResultSummary = payload.job?.resultSummary,
+                    jobDeepLink = payload.job?.deepLink,
+                )
+            }
+            try {
+                insert(payload.seq)
+            } catch (e: android.database.sqlite.SQLiteConstraintException) {
+                // Server/device drift (e.g. server-side rows pruned and seqs
+                // reallocated): keep the message by landing on a reserved
+                // negative seq; sync reconciliation restores the canonical one.
+                Log.w(TAG, "[$source] seq collision, using reserved seq: ${e.message}")
+                insert(null)
+            }
         }
 
         if (existing !== null) {

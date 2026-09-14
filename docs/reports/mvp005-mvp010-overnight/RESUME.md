@@ -5,7 +5,8 @@ Working tree: clean. Latest commit: see `git log --oneline -10`.
 
 ## State
 
-- MVP-005…010 all VERIFIED (see FINAL-REPORT.md for the table + evidence paths).
+- MVP-005…011 all VERIFIED (see FINAL-REPORT.md for the table + evidence paths).
+- MVP-011: worker coalescing deployed (schema_010 `job_states`), worker version `1ac1e820…`.
 - Worker deployed (Cloudflare `pigeonhub-push`): job columns on publish/FCM/sync, GitHub
   webhook job mapping, pairing endpoints. D1 migrations applied: `schema_008.sql`,
   `schema_009.sql` (both additive).
@@ -26,6 +27,9 @@ Working tree: clean. Latest commit: see `git log --oneline -10`.
 4. Re-test a full real `claude -p` session Stop-hook when API quota resets (manual lifecycle
    already verified).
 5. Bottom-nav EN labels wrap at font ≥150% (accepted MVP-004 finding; Korean unaffected).
+6. Test-artifact drift note: pruning D1 messages mid-life of a device reassigns seqs and causes
+   (channel, seq) collisions on the phone — now absorbed by the reserved-seq fallback, but avoid
+   deleting production rows under a live installation.
 
 ## Quick verification commands
 

@@ -50,3 +50,39 @@ Failure and "waiting on you" moments reach the lock screen instantly; silent pro
 buzzes. Connecting a new machine is a 10-minute one-time code, not tokens and endpoints.
 And none of it cost the old guarantees: plain pushes, GitHub alerts and multi-device
 delivery still pass the same tests as before.
+
+---
+
+# MVP-011 — Server-side Job Progress Coalescing (follow-on milestone)
+
+**Status: VERIFIED** (commit: this one; worker version `1ac1e820…`, schema_010 applied)
+
+## Implementation
+- `schema_010.sql`: `job_states` — durable coalescing state per (channel, source, job_id).
+- `worker/src/job_coalescing.ts`: deterministic policy gate placed BEFORE quota in the publish
+  handler. RUNNING/terminals always emit; PROGRESS emits on >=10s interval, >=5pp jump, or
+  material text/status change; everything else is ONE state upsert (no message row, no quota,
+  no FCM). Stale PROGRESS after a terminal is dropped server-side (job can never revert to
+  RUNNING). Duplicate terminals keep existing idempotency rules.
+- Android: no pipeline changes. One QA-driven defense added: (channel, seq) collisions no
+  longer crash the FCM path or stall sync — both fall back to a reserved negative seq and the
+  next sync upsert restores the canonical server seq.
+
+## Real E2E evidence (prod worker + emulator, connector credentials)
+| Scenario | Result |
+|---|---|
+| 100 PROGRESS publishes (0→20% sweep, 10s) + RUNNING + DONE | D1: exactly **7 rows** (RUNNING 1, PROGRESS 5, DONE 1), all `fcm_accepted`; 93 events coalesced; device card final "100 / 500 · 20%" |
+| progress 1→6 of 1000 (0.1pp steps) | RUNNING + first progress emitted, 2..6 coalesced, DONE immediate |
+| 10s-interval / 5pp / coalesce rules | emit / emit / coalesced — exactly per policy |
+| Job A / Job B interleaved | independent state rows; each job's first progress emitted separately |
+| PROGRESS → DONE | DONE immediate (`stored: true`, never coalesced) |
+| DONE → late PROGRESS | dropped server-side: `coalesced: true, reason: "stale progress after terminal"`; device card never reverted to RUNNING |
+| FAILED / NEEDS_ACTION | immediate push (device: Needs action / Failed cards) |
+| process restart / induced seq drift | state lives in D1; device FCM+sync survived collisions with reserved-seq fallback, sync `recovered=22`, no new crashes |
+
+## Regression re-run
+- MY_PUSH: in-app test send → `delivered push … HIGH` ✓
+- GitHub structured job: real workflow run 34776882129 → webhook → `gh-run-…` delivered ✓
+- Python CLI job: `run --name "Regression CLI job"` → RUNNING/DONE card on device ✓
+- Attention policy: toggle OFF blocks, ON restores; duplicates suppressed across restart ✓
+- Multi-device fan-out: GitHub run delivered to 3 channels (D1) ✓

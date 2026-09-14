@@ -55,3 +55,21 @@ Notes:
   dedupe per `(source, job_id, state)` via existing MessageDeduper + a job-state gate.
 - HomeScreen groups consecutive messages with the same `(job_source, job_id)` into one
   JobCard (latest state wins); unstructured messages render exactly as before.
+
+
+## MVP-011: server-side job progress coalescing
+
+Connector → **coalescing gate** (new, before quota) → Common Job Store → Delivery Policy → FCM.
+
+- State: D1 `job_states` (schema_010), one row per (channel, source, job_id) — durable, so
+  correctness survives worker restarts/isolate moves.
+- RUNNING and terminal states (DONE/FAILED/NEEDS_ACTION) always emit immediately.
+- PROGRESS emits only when: >= 10s since last emitted event, OR >= 5 percentage-point jump,
+  OR material text/status change (message or totals differ). Otherwise the event is coalesced:
+  ONE `job_states` upsert, no message row, no quota consumption, no FCM.
+- Stale-progress protection: after a terminal state, late PROGRESS is dropped (job can never
+  flip back to RUNNING). A fresh RUNNING after terminal = re-run: emits and resets.
+- Android: no changes. Workers' FCM path untouched.
+- Defense added on the phone (found by QA during this milestone): a (channel, seq) collision —
+  possible after server-side pruning — no longer crashes the FCM path or stalls sync; both fall
+  back to a reserved negative seq and the next sync upsert restores the canonical server seq.

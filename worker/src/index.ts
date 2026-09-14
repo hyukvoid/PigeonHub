@@ -13,6 +13,7 @@ import { getAccessToken } from "./gcp_auth.js";
 import { canonicalRequestHash } from "./d1.js";
 import { validateAgentEvent, type ValidatedAgentEvent } from "./agent_event.js";
 import { validateJobEvent, type ValidatedJobEvent } from "./jobs.js";
+import { shouldEmitJobEvent } from "./job_coalescing.js";
 import { issuePairingCode, redeemPairingCode, revokePairingCodes, isValidConnectorToken } from "./pairing.js";
 import { validatePush } from "./validate.js";
 import type { Env, PushRequest, ResolvedPush } from "./types.js";
@@ -842,6 +843,16 @@ export default {
         const result = validateJobEvent(body.job);
         if (!result.ok) return json({ ok: false, errors: result.errors }, 400);
         job = result.job;
+      }
+
+      // MVP-011: chatty PROGRESS events are coalesced server-side. A coalesced
+      // event costs one job_states upsert — no message row, no quota, no FCM.
+      // Terminal states and RUNNING always pass through immediately.
+      if (job !== null) {
+        const decision = await shouldEmitJobEvent(env, channel.id, job, validated.push.message);
+        if (!decision.emit) {
+          return json({ ok: true, stored: true, coalesced: true, reason: decision.reason });
+        }
       }
 
       return durablePublish(env, {
