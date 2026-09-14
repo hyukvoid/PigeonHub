@@ -82,12 +82,6 @@
     <string name="github_connected">Connected</string>
     <string name="github_not_connected">Not connected</string>
     <string name="github_disconnect">Disconnect</string>
-    <string name="github_health_connected">Connected</string>
-    <string name="github_health_no_events">Connected. No new events yet.</string>
-    <string name="github_health_last_event">Last event: %1$s ago</string>
-    <string name="github_health_notifications_ok">Notifications: Working</string>
-    <string name="github_health_notifications_off">Phone notifications are off.</string>
-    <string name="github_health_open_notification_settings">Open notification settings</string>
     <string name="github_connection_test_label">Connection test</string>
     <string name="github_no_workflows">No GitHub Actions runs yet.\nWe\'ll notify you when a workflow completes.</string>
     <string name="github_repo_select_hint">Select repositories to watch</string>
@@ -185,6 +179,12 @@
     <string name="inbox_delete_all_title">Delete all messages?</string>
     <string name="inbox_delete_all_body">Every message in your inbox will be removed.</string>
     <string name="inbox_delete_all_confirm">Delete all</string>
+
+    <!-- Connection health (MVP-015) -->
+    <string name="health_connected">Connected</string>
+    <string name="health_degraded">Check connection</string>
+    <string name="health_disconnected">Disconnected</string>
+    <string name="health_last_event">Last event: %1$s</string>
 
     <!-- Common -->
     <string name="common_copy">Copy</string>

@@ -1,6 +1,6 @@
 /**
  * MVP-011.5 durable-deletion protocol tests. Run: node scripts/delete_test.mjs <base-url>
- * Consumes one fresh invite code (TEST_INVITE_CODE_13).
+ * Consumes one fresh invite code (TEST_INVITE_CODE_17).
  * Gates: DELETE_AUTH, DELETE_VALIDATION, DELETE_TOMBSTONE, NO_RESURRECTION,
  *        DELETE_ALL, DELETE_IDEMPOTENT, SYNC_REPORTS_TOMBSTONES.
  */
@@ -38,7 +38,7 @@ const identity = {
     },
     body: JSON.stringify({
       bootstrap_id: identity.bootstrapId,
-      invite_code: devVar("TEST_INVITE_CODE_13"),
+      invite_code: devVar("TEST_INVITE_CODE_17"),
       write_token_hash: sha256hex(identity.writeToken),
       fcm_token: `del-test-${randomUUID()}`,
       platform: "android",
@@ -154,6 +154,25 @@ const mid = (n) => `del-${RUN}-${n}`;
 {
   const s = await sync(0);
   record("SYNC_REPORTS_TOMBSTONES", Array.isArray(s.body.deleted_ids), `field present=${Array.isArray(s.body.deleted_ids)}`);
+}
+
+// ---------- HEALTH (MVP-015) ----------
+{
+  const noAuth = await fetch(`${BASE}/v1/installations/me/health`);
+  const res = await fetch(`${BASE}/v1/installations/me/health`, {
+    headers: { Authorization: `Bearer ${identity.managementSecret}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  const rows = Array.isArray(body.health) ? body.health : [];
+  const push = rows.find((r) => r.source === "push");
+  const device = rows.find((r) => r.source === "device");
+  record(
+    "HEALTH_ENDPOINT",
+    noAuth.status === 401 && res.status === 200 && body.ok === true
+      && push?.state === "CONNECTED" && device?.state === "CONNECTED"
+      && typeof push.last_event_at === "string",
+    `no_auth=${noAuth.status} sources=${rows.map((r) => r.source + ":" + r.state).join(",")}`,
+  );
 }
 
 const failed = results.filter((r) => !r.pass);

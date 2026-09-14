@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pigeonhub.app.R
+import com.pigeonhub.app.push.installation.HealthApi
 import com.pigeonhub.app.push.installation.PairingApi
 import kotlinx.coroutines.launch
 
@@ -43,7 +44,11 @@ import kotlinx.coroutines.launch
  * bearer token, channel id or webhook is ever shown to the user.
  */
 @Composable
-fun ComfyUiCard(showSnackbar: (String) -> Unit) {
+fun ComfyUiCard(
+    showSnackbar: (String) -> Unit,
+    health: HealthApi.ConnectorHealth? = null,
+    now: Long = 0L,
+) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     var busy by remember { mutableStateOf(false) }
@@ -67,6 +72,7 @@ fun ComfyUiCard(showSnackbar: (String) -> Unit) {
                 title = stringResource(R.string.comfyui_title),
                 tagline = stringResource(R.string.comfyui_tagline),
             )
+            HealthLine(health, now)
             Button(
                 onClick = {
                     busy = true

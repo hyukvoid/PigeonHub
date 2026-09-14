@@ -77,12 +77,6 @@
     <string name="github_not_connected">연결 안 됨</string>
     <string name="github_disconnect">연결 해제</string>
     <string name="github_manage">GitHub에서 관리</string>
-    <string name="github_health_connected">연결됨</string>
-    <string name="github_health_no_events">연결 정상이에요. 아직 새 이벤트가 없어요.</string>
-    <string name="github_health_last_event">마지막 이벤트: %1$s 전</string>
-    <string name="github_health_notifications_ok">알림: 정상</string>
-    <string name="github_health_notifications_off">휴대폰 알림이 꺼져 있어요.</string>
-    <string name="github_health_open_notification_settings">알림 설정 열기</string>
     <string name="github_connection_test_label">연결 테스트</string>
     <string name="github_no_workflows">아직 GitHub Actions 실행 기록이 없어요.\nWorkflow가 처음 완료되면 알려드릴게요.</string>
     <string name="github_repo_select_hint">감시할 repository를 선택하세요</string>
@@ -176,6 +170,10 @@
     <string name="inbox_delete_all_body">수신함의 모든 메시지가 삭제됩니다.</string>
     <string name="inbox_delete_all_confirm">모두 삭제</string>
 
+    <string name="health_connected">연결됨</string>
+    <string name="health_degraded">확인 필요</string>
+    <string name="health_disconnected">연결 해제됨</string>
+    <string name="health_last_event">마지막 활동: %1$s</string>
     <string name="common_copy">복사</string>
     <string name="common_copied">복사했어요</string>
     <string name="common_close">닫기</string>

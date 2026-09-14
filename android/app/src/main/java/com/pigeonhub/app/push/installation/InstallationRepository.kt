@@ -518,7 +518,7 @@ object InstallationRepository {
             hasMore = json.optBoolean("has_more", false)
         }
         if (error === null) {
-            Log.i(TAG, "inbox sync complete: pages=$pages recovered=$recovered truncated=$truncated")
+            Log.i(TAG, "inbox sync complete: pages=$pages recovered=$recovered truncated=$truncated cursor=$after")
         } else {
             Log.w(TAG, "inbox sync failed: $error (cursor unchanged)")
         }

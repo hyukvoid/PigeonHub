@@ -101,3 +101,42 @@ is single-use anyway.
 | CONNECTOR_TOKEN_PUBLISH | minted pct_ token published real jobs (QR pair check → phone card) |
 
 Protocol suite: `worker/scripts/pairing_test.mjs` — 6/6 PASS against the deployed worker.
+
+---
+
+## MVP-014 Real Agent E2E (2026-09-15) — VERIFIED (Codex) / Claude DEFERRED
+
+See commit `4acb11d`. `connectors/agent_bridge_codex.py` wraps REAL `codex exec --json`
+sessions (public JSONL event stream only) into the job contract: thread.started→RUNNING
+(job id = real thread id), item/turn→PROGRESS, exit 0→DONE, error/exit≠0→FAILED.
+
+- REAL_AGENT_START / REAL_AGENT_JOB_EVENT / REAL_AGENT_TERMINAL / ANDROID_CARD /
+  ATTENTION_POLICY (DONE/FAILED on the HIGH channel, RUNNING/PROGRESS inbox-only) — all
+  observed on-device with real multi-step Codex sessions (tool use, 3-5 steps).
+- Claude Code real session: **DEFERRED_OWNER_ACTION** — API 402 insufficient_quota.
+  Owner action: add credits, then wire hooks per connectors/agent_hook.py.
+
+## MVP-015 Connection Health (2026-09-15) — VERIFIED
+
+Server (worker `06046c1d`, schema_012 additive `connector_health`):
+- Worker-observed truth only: accepted publishes (incl. coalesced PROGRESS), GitHub
+  webhook fan-out, device syncs record last_seen/last_event/last_success/last_failure
+  per (channel, source).
+- GET /v1/installations/me/health returns rows + derived state. States deliberately
+  coarse: CONNECTED ≤24h, DEGRADED ≤72h ("확인 필요"), UNKNOWN (never seen — rare-event
+  sources never read as broken), DISCONNECTED reserved.
+
+Android:
+- HealthLine (dot + "Last event: X ago") on GitHub / My Push / AI Agents / ComfyUI
+  cards; GitHub correctly shows NO line when never seen (no false "broken").
+- Merged worst-state per card; degraded lines surface the STALE source's age:
+  "Check connection · Last event: 3 days ago" (KO: "확인 필요 · 마지막 활동: 3일 전").
+- Self-heal verified: stale cli row → DEGRADED; new connector publish → CONNECTED.
+- Recovery actions per card already exist (Connect / Manage on GitHub / Send test
+  notification / Revoke code); no remote-control surface added.
+- Internal terms (webhook/token/FCM/HTTP) never appear in the status copy.
+
+Protocol: delete_test.mjs extended → 9/9 PASS (HEALTH_ENDPOINT: 401 unauth, states,
+last_event_at). DEGRADED/heal E2E screenshots in evidence/. KO/EN verified on device.
+Also: QUOTA_DAILY_LIMIT raised 50→300 in wrangler.jsonc — nightly E2E hit the daily
+cap; owner may re-tighten before production.

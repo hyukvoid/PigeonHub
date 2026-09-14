@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pigeonhub.app.R
 import com.pigeonhub.app.push.installation.BootstrapStatus
+import com.pigeonhub.app.push.installation.HealthApi
 import com.pigeonhub.app.push.installation.InstallationRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,6 +76,13 @@ fun ConnectionsScreen(
     val installState by InstallationRepository.state.collectAsState()
     val scope = rememberCoroutineScope()
     val registered = installState.status == BootstrapStatus.REGISTERED
+
+    // MVP-015: worker-observed health per connector, refreshed on screen show.
+    val now = rememberTickingNow()
+    var health by remember { mutableStateOf<Map<String, HealthApi.ConnectorHealth>>(emptyMap()) }
+    LaunchedEffect(registered) {
+        if (registered) health = HealthApi.fetch()
+    }
 
     // Real GitHub connection state. The status read doubles as the
     // owner-scoped auto-join: a reinstalled or brand-new device inherits
@@ -137,6 +145,7 @@ fun ConnectionsScreen(
                     connectedText = stringResource(R.string.github_connected),
                     notConnectedText = stringResource(R.string.github_not_connected),
                 )
+                HealthLine(HealthApi.merge(health, "github"), now)
                 if (githubConnected) {
                     // Already connected: the GitHub page is for managing watched
                     // repos — offered as a secondary action, not a confusing
@@ -156,15 +165,21 @@ fun ConnectionsScreen(
         if (registered) {
             MyPushCard(
                 endpoint = installState.endpoint,
+                health = HealthApi.merge(health, "device", "push"),
+                now = now,
                 showSnackbar = showSnackbar,
             )
         }
 
         // ---- AI Agents (MVP-009: hook-based connector) ----
-        AiAgentCard(showSnackbar = showSnackbar)
+        AiAgentCard(showSnackbar = showSnackbar, health = HealthApi.merge(health, "agent"), now = now)
 
-        // ---- ComfyUI (MVP-007 POC) ----
-        ComfyUiCard(showSnackbar = showSnackbar)
+        // ---- ComfyUI / connectors (MVP-007/012) ----
+        ComfyUiCard(
+            showSnackbar = showSnackbar,
+            health = HealthApi.merge(health, "comfyui", "cli", "push"),
+            now = now,
+        )
 
         // ---- Custom ----
         HowToCard(
@@ -183,7 +198,12 @@ fun ConnectionsScreen(
 }
 
 @Composable
-private fun MyPushCard(endpoint: String?, showSnackbar: (String) -> Unit) {
+private fun MyPushCard(
+    endpoint: String?,
+    health: HealthApi.ConnectorHealth?,
+    now: Long,
+    showSnackbar: (String) -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val copiedMsg = stringResource(R.string.connections_curl_copied)
@@ -208,6 +228,7 @@ private fun MyPushCard(endpoint: String?, showSnackbar: (String) -> Unit) {
                 title = stringResource(R.string.connections_mypush_title),
                 tagline = null,
             )
+            HealthLine(health, now)
             StatusChip(
                 connected = true,
                 connectedText = stringResource(R.string.connections_status_connected),

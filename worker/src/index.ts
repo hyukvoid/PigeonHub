@@ -15,6 +15,7 @@ import { validateAgentEvent, type ValidatedAgentEvent } from "./agent_event.js";
 import { validateJobEvent, type ValidatedJobEvent } from "./jobs.js";
 import { shouldEmitJobEvent } from "./job_coalescing.js";
 import { issuePairingCode, redeemPairingCode, revokePairingCodes, isValidConnectorToken } from "./pairing.js";
+import { recordConnectorSeen, getChannelHealth, deriveState } from "./health.js";
 import { validatePush } from "./validate.js";
 import type { Env, PushRequest, ResolvedPush } from "./types.js";
 import {
@@ -347,6 +348,10 @@ export default {
             return json({ ok: true, skipped: "no members" });
           }
           console.log(`github_webhook fanout_targets=${targets.length}`);
+          // MVP-015: the webhook reaching N channels = GitHub connector seen.
+          await Promise.all(
+            targets.map((t) => recordConnectorSeen(env, t.channelId, "github", { event: true, success: true })),
+          );
 
           const conclusion = wr.conclusion ?? "unknown";
           const repoName = event.repository?.full_name ?? "unknown";
@@ -642,6 +647,9 @@ export default {
         const channel = await getChannelByInstallation(env, installation.id);
         if (!channel) return json({ ok: false, error: "channel missing" }, 500);
 
+        // MVP-015: a sync is the device announcing "alive" — feed health.
+        await recordConnectorSeen(env, channel.id, "device", { success: true });
+
         const params = url.searchParams;
         const limitRaw = Number(params.get("limit") ?? "50");
         const limit = Math.min(Math.max(Number.isInteger(limitRaw) && limitRaw > 0 ? limitRaw : 50, 1), 200);
@@ -752,6 +760,28 @@ export default {
       const result = await redeemPairingCode(env, url.origin, code);
       if ("error" in result) return json({ ok: false, error: result.error }, 403);
       return json({ ok: true, ...result });
+    }
+
+    // ---- MVP-015: per-connector health for the Connections screen ----
+    if (url.pathname === "/v1/installations/me/health" && request.method === "GET") {
+      return requireInstallation(request, env, async (installation) => {
+        const channel = await getChannelByInstallation(env, installation.id);
+        if (!channel) return json({ ok: false, error: "channel missing" }, 500);
+        const rows = await getChannelHealth(env, channel.id);
+        const now = Date.now();
+        return json({
+          ok: true,
+          health: rows.map((r) => ({
+            source: r.source,
+            state: deriveState(r, now),
+            last_seen_at: r.last_seen_at,
+            last_event_at: r.last_event_at,
+            last_success_at: r.last_success_at,
+            last_failure_at: r.last_failure_at,
+            last_failure_reason: r.last_failure_reason,
+          })),
+        });
+      });
     }
 
     // ---- MVP-011.5: durable inbox deletion (tombstones, additive) ----
@@ -905,9 +935,13 @@ export default {
       if (job !== null) {
         const decision = await shouldEmitJobEvent(env, channel.id, job, validated.push.message);
         if (!decision.emit) {
+          // MVP-015: a coalesced PROGRESS is still real connector activity.
+          await recordConnectorSeen(env, channel.id, job.source, { event: true, success: true });
           return json({ ok: true, stored: true, coalesced: true, reason: decision.reason });
         }
       }
+      const healthSource = job?.source ?? "push";
+      await recordConnectorSeen(env, channel.id, healthSource, { event: true, success: true });
 
       return durablePublish(env, {
         channelId: channel.id,

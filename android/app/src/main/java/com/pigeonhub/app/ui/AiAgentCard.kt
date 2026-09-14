@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.height
 import com.pigeonhub.app.R
+import com.pigeonhub.app.push.installation.HealthApi
 
 /**
  * MVP-009: AI Agents connection. Shows the vendor-neutral hook commands to
@@ -38,7 +39,11 @@ import com.pigeonhub.app.R
  * (the agent waiting on the user becomes a high-priority alert).
  */
 @Composable
-fun AiAgentCard(showSnackbar: (String) -> Unit) {
+fun AiAgentCard(
+    showSnackbar: (String) -> Unit,
+    health: HealthApi.ConnectorHealth? = null,
+    now: Long = 0L,
+) {
     var showDialog by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val copiedMsg = stringResource(R.string.common_copied)
@@ -61,6 +66,7 @@ fun AiAgentCard(showSnackbar: (String) -> Unit) {
                 title = stringResource(R.string.ai_agents_title),
                 tagline = stringResource(R.string.ai_agents_tagline),
             )
+            HealthLine(health, now)
             Button(onClick = { showDialog = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.connections_howto))
             }

@@ -607,35 +607,4 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit, now: Lo
     }
 }
 
-/**
- * MVP-011.5A: the current wall clock, refreshed every [intervalMs] while this
- * screen is resumed and immediately on background->foreground return. Relative
- * labels are derived from THIS value + the stored message timestamp — the
- * formatted string is never persisted, so it can never go stale.
- */
-@Composable
-private fun rememberTickingNow(intervalMs: Long = 60_000L): Long {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            now = System.currentTimeMillis()
-            while (true) {
-                delay(intervalMs)
-                now = System.currentTimeMillis()
-            }
-        }
-    }
-    return now
-}
 
-@Composable
-private fun relativeLabel(timestampMs: Long, nowMs: Long): String {
-    val time = RelativeTime.compute(timestampMs, nowMs)
-    val res = RelativeTime.labelRes(time)
-    return if (RelativeTime.hasCountArg(time)) {
-        stringResource(res, RelativeTime.countArg(time))
-    } else {
-        stringResource(res)
-    }
-}

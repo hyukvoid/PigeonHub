@@ -11,7 +11,7 @@
     "FIREBASE_PROJECT_ID": "pigeonhub-b958d",
     // Development channel + free-tier protection quotas (per channel scope).
     "CHANNEL_ID": "dev",
-    "QUOTA_DAILY_LIMIT": "50",
+    "QUOTA_DAILY_LIMIT": "300",
     "QUOTA_MINUTE_LIMIT": "5",
     "GLOBAL_DAILY_LIMIT": "1000",
     // Beta gate: maximum registered installations (bootstrap rejects beyond this).
