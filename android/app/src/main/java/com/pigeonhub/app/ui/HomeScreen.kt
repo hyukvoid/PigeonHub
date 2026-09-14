@@ -124,7 +124,7 @@ fun HomeScreen(
     val displayItems = remember(entries) { entries?.let { collapseInboxItems(it) } }
     var swipeResetEpoch by remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
-    fun performDelete(messageIds: List<String>, onFailureRestore: (() -> Unit)? = null) {
+    fun performDelete(messageIds: List<String>, all: Boolean = false, onFailureRestore: (() -> Unit)? = null) {
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 InstallationRepository.deleteMessages(messageIds)
@@ -133,7 +133,9 @@ fun HomeScreen(
                 withContext(Dispatchers.IO) {
                     InboxDatabase.get(context).inboxDao().deleteByMessageIds(messageIds)
                 }
-                showSnackbar(if (messageIds.size == 1) deletedOneMsg else deletedAllMsg)
+                // A single Job Card carries several events — label by intent,
+                // not by row count.
+                showSnackbar(if (all) deletedAllMsg else deletedOneMsg)
             } else {
                 onFailureRestore?.invoke()
                 showSnackbar(deleteFailedMsg)
@@ -231,7 +233,7 @@ fun HomeScreen(
                                 is InboxItem.Job -> item.events.map { it.message_id }
                             }
                         }
-                        performDelete(ids)
+                        performDelete(ids, all = true)
                     }) { Text(stringResource(R.string.inbox_delete_all_confirm)) }
                 },
                 dismissButton = {
@@ -551,22 +553,21 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit, now: Lo
             Text(detail, style = MaterialTheme.typography.bodyMedium)
 
             val started = item.startedAt
-            if (state == JobPayload.State.RUNNING && started != null) {
-                val elapsed = runCatching {
-                    android.text.format.DateUtils.getRelativeTimeSpanString(
-                        java.time.OffsetDateTime.parse(started).toInstant().toEpochMilli(),
-                        now,
-                        0L,
-                        android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE,
-                    ).toString()
+            val elapsedInfo = if (state == JobPayload.State.RUNNING && started != null) {
+                runCatching {
+                    val startMs = java.time.OffsetDateTime.parse(started).toInstant().toEpochMilli()
+                    RelativeTime.elapsedRes(startMs, now)
                 }.getOrNull()
-                if (elapsed != null) {
-                    Text(
-                        stringResource(R.string.job_elapsed, elapsed),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            } else {
+                null
+            }
+            if (elapsedInfo != null) {
+                val (res, args) = elapsedInfo
+                Text(
+                    stringResource(R.string.job_elapsed, stringResource(res, *args.toTypedArray())),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             item.deepLink?.let { url ->
@@ -622,9 +623,10 @@ private fun rememberTickingNow(intervalMs: Long = 60_000L): Long {
 @Composable
 private fun relativeLabel(timestampMs: Long, nowMs: Long): String {
     val time = RelativeTime.compute(timestampMs, nowMs)
-    return if (time is RelativeTime.JustNow || time is RelativeTime.Yesterday) {
-        stringResource(RelativeTime.labelRes(time))
+    val res = RelativeTime.labelRes(time)
+    return if (RelativeTime.hasCountArg(time)) {
+        stringResource(res, RelativeTime.countArg(time))
     } else {
-        stringResource(RelativeTime.labelRes(time), RelativeTime.countArg(time))
+        stringResource(res)
     }
 }

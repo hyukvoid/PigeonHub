@@ -155,10 +155,16 @@
 
     <!-- Relative time (MVP-011.5A) -->
     <string name="time_just_now">방금 전</string>
+    <string name="time_minute_ago">1분 전</string>
     <string name="time_minutes_ago">%1$d분 전</string>
+    <string name="time_hour_ago">1시간 전</string>
     <string name="time_hours_ago">%1$d시간 전</string>
     <string name="time_yesterday">어제</string>
+    <string name="time_day_ago">1일 전</string>
     <string name="time_days_ago">%1$d일 전</string>
+    <string name="duration_sec">%1$d초</string>
+    <string name="duration_min">%1$d분</string>
+    <string name="duration_hr_min">%1$d시간 %2$d분</string>
 
     <!-- Inbox delete (MVP-011.5B/C) -->
     <string name="inbox_delete_action">삭제</string>

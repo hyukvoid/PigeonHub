@@ -168,7 +168,7 @@ def cmd_run(args):
         {"source": "cli", "job_id": job_id, "job_name": job_name, "started_at": started}
     ), encoding="utf-8")
     publish_job("cli", job_id, "RUNNING", job_name=job_name, started_at=started,
-                title=f"{job_name}: started", message=" ".join(args.cmd))
+                title=f"{job_name}: started", message=" ".join(args.command))
     proc = subprocess.run(args.command)
     finished = datetime.now(timezone.utc).isoformat()
     if proc.returncode == 0:

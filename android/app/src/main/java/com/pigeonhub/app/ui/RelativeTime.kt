@@ -34,10 +34,18 @@ sealed interface RelativeTime {
 
         fun labelRes(time: RelativeTime): Int = when (time) {
             JustNow -> R.string.time_just_now
-            is Minutes -> R.string.time_minutes_ago
-            is Hours -> R.string.time_hours_ago
+            is Minutes -> if (time.count == 1) R.string.time_minute_ago else R.string.time_minutes_ago
+            is Hours -> if (time.count == 1) R.string.time_hour_ago else R.string.time_hours_ago
             Yesterday -> R.string.time_yesterday
-            is Days -> R.string.time_days_ago
+            is Days -> if (time.count == 1) R.string.time_day_ago else R.string.time_days_ago
+        }
+
+        /** Whether [labelRes]'s string needs the count format argument. */
+        fun hasCountArg(time: RelativeTime): Boolean = when (time) {
+            is Minutes -> time.count > 1
+            is Hours -> time.count > 1
+            is Days -> time.count > 1
+            else -> false
         }
 
         fun countArg(time: RelativeTime): Int = when (time) {
@@ -45,6 +53,24 @@ sealed interface RelativeTime {
             is Hours -> time.count
             is Days -> time.count
             else -> 0
+        }
+
+        /**
+         * Elapsed-duration label for a running job: res id + format args,
+         * CLAMPED at zero — started_at carries the connector's clock, which
+         * can be ahead of the device, and a negative elapsed must never
+         * render as a future form ("in 40 sec").
+         */
+        fun elapsedRes(startedMs: Long, nowMs: Long): Pair<Int, IntArray> {
+            val s = ((nowMs - startedMs) / 1000L).coerceAtLeast(0L)
+            return when {
+                s < 60L -> R.string.duration_sec to intArrayOf(s.toInt())
+                s < 3600L -> R.string.duration_min to intArrayOf((s / 60L).toInt())
+                else -> R.string.duration_hr_min to intArrayOf(
+                    (s / 3600L).toInt(),
+                    ((s % 3600L) / 60L).toInt(),
+                )
+            }
         }
     }
 }

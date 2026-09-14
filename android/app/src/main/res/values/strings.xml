@@ -165,10 +165,16 @@
 
     <!-- Relative time (MVP-011.5A) -->
     <string name="time_just_now">just now</string>
+    <string name="time_minute_ago">1 minute ago</string>
     <string name="time_minutes_ago">%1$d minutes ago</string>
+    <string name="time_hour_ago">1 hour ago</string>
     <string name="time_hours_ago">%1$d hours ago</string>
     <string name="time_yesterday">yesterday</string>
+    <string name="time_day_ago">1 day ago</string>
     <string name="time_days_ago">%1$d days ago</string>
+    <string name="duration_sec">%1$d sec</string>
+    <string name="duration_min">%1$d min</string>
+    <string name="duration_hr_min">%1$d hr %2$d min</string>
 
     <!-- Inbox delete (MVP-011.5B/C) -->
     <string name="inbox_delete_action">Delete</string>
