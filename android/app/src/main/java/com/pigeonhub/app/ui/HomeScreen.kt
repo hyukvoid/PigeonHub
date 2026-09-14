@@ -381,6 +381,15 @@ private fun OfflineBanner(text: String, onRetry: () -> Unit) {
     }
 }
 
+/** Known connector sources render with their proper casing ("ComfyUI", not "Comfyui"). */
+private fun displaySource(source: String): String = when (source.lowercase()) {
+    "comfyui" -> "ComfyUI"
+    "cli" -> "CLI"
+    "github" -> "GitHub"
+    "agent" -> "Agent"
+    else -> source.replaceFirstChar { it.uppercase() }
+}
+
 @Composable
 private fun EntryCard(
     entry: InboxMessage,
@@ -526,7 +535,7 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit, now: Lo
                 )
             }
             Text(
-                item.source.replaceFirstChar { it.uppercase() } + " \u00b7 " + item.displayName,
+                displaySource(item.source) + " \u00b7 " + item.displayName,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )

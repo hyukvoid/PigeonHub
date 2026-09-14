@@ -1,0 +1,14 @@
+{
+  "1": {
+    "class_type": "EmptyImage",
+    "inputs": {"width": 512, "height": 512, "batch_size": 1, "color": 14342874}
+  },
+  "2": {
+    "class_type": "ImageBlur",
+    "inputs": {"image": ["1", 0], "blur_radius": 31, "sigma": 5.0}
+  },
+  "3": {
+    "class_type": "SaveImage",
+    "inputs": {"images": ["2", 0], "filename_prefix": "pigeonhub_e2e"}
+  }
+}
