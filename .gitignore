@@ -82,3 +82,5 @@ ui.xml
 /dist/
 /packaging/windows/dist/
 /packaging/windows/installer/
+*.egg-info/
+packaging/windows/pigeonhub.spec
