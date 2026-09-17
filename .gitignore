@@ -77,3 +77,8 @@ __pycache__/
 tools/comfyui/
 tools/comfyui-venv/
 ui.xml
+
+# ---- Windows packaging (MVP-018): scripts are committed, artifacts are not ----
+/dist/
+/packaging/windows/dist/
+/packaging/windows/installer/
