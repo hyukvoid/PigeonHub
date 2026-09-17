@@ -1,19 +1,40 @@
 # PigeonHub
 
-Push notifications for developers, straight from a `curl` request to your pocket.
+Start it. Walk away.
+PigeonHub tells you when it matters.
 
-```
-HTTP request ──▶ dev sender (Fastify) ──▶ Firebase Cloud Messaging ──▶ Android device ──▶ PigeonHub notification ──▶ Inbox
+Long-running jobs on your PC or in the cloud — crawlers, builds, renders, AI
+agents — report their lifecycle to the PigeonHub Android Job Inbox: `RUNNING`,
+`PROGRESS`, `DONE`, `FAILED`, and `NEEDS_ACTION`, with a push only when it
+matters.
+
+## Install PigeonHub CLI (Windows)
+
+1. Download `PigeonHub-Setup-<version>.exe` and run it.
+2. Open a **new** PowerShell window and run `pigeonhub login` (scan the QR with
+   the PigeonHub Android app).
+3. Send your first job:
+
+```powershell
+pigeonhub run --name "Crawler" -- python crawler.py
 ```
 
-**Status: FCM registration LIVE, real send pending one credential.** The
-Android client builds and runs with the dedicated Firebase project
-(`pigeonhub-b958d`, package `com.pigeonhub.app`): the Device tab fetches a real
-FCM registration token. The only remaining step for true end-to-end push is the
-owner-provided service account JSON for the dev sender
-(see [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) — until then `/push`
-runs in mock mode). The client pipeline is also fully exercisable locally
-(in-app test push + adb injector).
+That's the whole loop: the job shows up on your phone, and you get a push when
+it finishes or needs you. No Python install, no PATH editing, no background
+daemon — `pigeonhub` is a single command-line tool.
+
+Upgrading: run the newer setup over the old one (your login is kept).
+Uninstalling: remove it from Windows "Installed apps" (your login is kept;
+run `pigeonhub logout` to remove it explicitly).
+No code-signing certificate yet: Windows SmartScreen may ask for
+"More info → Run anyway" on the first install.
+
+### Building the installer from source (maintainers)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
+# artifacts: dist\pigeonhub.exe, dist\PigeonHub-Setup-<version>.exe, dist\SHA256SUMS.txt
+```
 
 ## Repository layout
 
@@ -34,12 +55,11 @@ runs in mock mode). The client pipeline is also fully exercisable locally
 > [mvp-001b-d1-durable-core](docs/mvp-001b-d1-durable-core-report.md) ·
 > [mvp-001c-retry-safe-bootstrap](docs/mvp-001c-retry-safe-bootstrap-report.md)
 
-### PigeonHub CLI (MVP-016)
+### PigeonHub CLI — commands
 
 The normal path is a declared command, not a background daemon:
 
 ```bash
-python -m pip install -e .
 pigeonhub login
 pigeonhub run --name "Product crawler" -- python crawler.py
 ```
@@ -63,7 +83,13 @@ accepted, the child is not started. The child receives `PIGEONHUB_JOB_ID`, and
 its stdout, stderr, and exit code are preserved. `logout` removes the local
 credential; `status` reports local login and worker reachability.
 
-Windows single-executable packaging and installer/PATH work remain MVP-018.
+AI coding agents can report their lifecycle through the same Job Model:
+`pigeonhub setup codex|claude|grok|zcode` installs vendor-native hooks with a
+preview, backup, and safe removal — see
+[docs/reports/mvp017-agent-integrations/](docs/reports/mvp017-agent-integrations/).
+
+Developers working on the CLI itself run it from source with
+`python -m pip install -e .` (Python ≥ 3.10).
 
 ### Worker quick start
 

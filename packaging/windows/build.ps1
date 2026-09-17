@@ -37,7 +37,7 @@ Copy-Item (Join-Path $winDir "dist\pigeonhub.exe") $dist -Force
 Copy-Item (Join-Path $winDir "installer\PigeonHub-Setup-$version.exe") $dist -Force
 Push-Location $dist
 try {
-    $sums = Get-ChildItem -File | ForEach-Object {
+    $sums = Get-ChildItem -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | ForEach-Object {
         $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $($_.Name)"
     }
