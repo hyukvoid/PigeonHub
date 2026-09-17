@@ -154,6 +154,18 @@ class CliCoreTests(unittest.TestCase):
         self.assertEqual(states, ["RUNNING", "FAILED"])
         self.assertEqual({event["job_id"] for event in self._events()}, {self._events()[0]["job_id"]})
 
+    def test_run_starts_windows_batch_shims_via_cmd(self):
+        if os.name != "nt":
+            self.skipTest("Windows .cmd shim behavior")
+        marker = Path(self.temp.name) / "shim-marker.txt"
+        shim = Path(self.temp.name) / "phshim.cmd"
+        shim.write_text(f"@echo off\r\ntype nul > \"{marker}\"\r\nexit /b 0\r\n", encoding="utf-8")
+        with patch.dict(os.environ, {"PATH": os.environ["PATH"] + os.pathsep + str(self.temp.name)}):
+            result = core.run_job([shim.stem, "ignored-arg"], name="batch shim test")
+        self.assertEqual(result, 0)
+        self.assertTrue(marker.exists())
+        self.assertEqual([event["state"] for event in self._events()], ["RUNNING", "DONE"])
+
     def test_progress_uses_same_lifecycle_job_id(self):
         command = [
             sys.executable,

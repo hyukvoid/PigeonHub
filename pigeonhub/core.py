@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -425,6 +426,20 @@ def report_needs_action(reason: str, *, job_id: str | None = None) -> PublishRes
     )
 
 
+def _resolve_windows_command(command: Sequence[str]) -> Sequence[str]:
+    """CreateProcess runs real executables only; .cmd/.bat shims need cmd.exe.
+
+    Tools like npm or winget ship as batch shims, so `pigeonhub run -- npm …`
+    would otherwise fail to start on Windows.
+    """
+    if os.name != "nt" or not command:
+        return command
+    executable = shutil.which(command[0])
+    if executable and executable.lower().endswith((".cmd", ".bat")):
+        return ["cmd", "/c"] + list(command)
+    return command
+
+
 def run_job(command: Sequence[str], *, name: str | None = None, source: str = "cli") -> int:
     if not command:
         raise CliError("A command is required. Example: pigeonhub run python crawler.py")
@@ -473,7 +488,7 @@ def run_job(command: Sequence[str], *, name: str | None = None, source: str = "c
         }
     )
     try:
-        process = subprocess.Popen(list(command), env=child_env)
+        process = subprocess.Popen(_resolve_windows_command(list(command)), env=child_env)
         exit_code = process.wait()
     except OSError as exc:
         try:
