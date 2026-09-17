@@ -1,6 +1,10 @@
 package com.pigeonhub.app.ui
 
-import androidx.compose.animation.AnimatedVisibility
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -11,18 +15,31 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Api
+import androidx.compose.material.icons.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Chat
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -31,10 +48,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,7 +62,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -60,13 +72,13 @@ import com.pigeonhub.app.R
 import com.pigeonhub.app.push.installation.BootstrapStatus
 import com.pigeonhub.app.push.installation.HealthApi
 import com.pigeonhub.app.push.installation.InstallationRepository
+import com.pigeonhub.app.push.installation.PairingApi
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
- * Connections hub (MVP-004 polish): every card answers three questions at a
- * glance — what is it, is it connected, what do I do next. Icons share one
- * optical system (24dp glyph in a 40dp primary-container circle).
+ * Connections is a tool directory first. Cards describe what PigeonHub does
+ * for a tool; the shared PC job wrapper remains the implementation boundary.
+ * No card implies a dedicated connector or remote execution capability.
  */
 @Composable
 fun ConnectionsScreen(
@@ -74,26 +86,57 @@ fun ConnectionsScreen(
     showSnackbar: (String) -> Unit,
 ) {
     val installState by InstallationRepository.state.collectAsState()
-    val scope = rememberCoroutineScope()
     val registered = installState.status == BootstrapStatus.REGISTERED
-
-    // MVP-015: worker-observed health per connector, refreshed on screen show.
+    val scope = rememberCoroutineScope()
     val now = rememberTickingNow()
     var health by remember { mutableStateOf<Map<String, HealthApi.ConnectorHealth>>(emptyMap()) }
-    LaunchedEffect(registered) {
-        if (registered) health = HealthApi.fetch()
-    }
-
-    // Real GitHub connection state. The status read doubles as the
-    // owner-scoped auto-join: a reinstalled or brand-new device inherits
-    // the GitHub connection here, so fan-out grows without any re-connect.
     var githubConnected by remember { mutableStateOf(false) }
+    var selectedTool by remember { mutableStateOf<ToolSpec?>(null) }
+    var comfyPairingCode by remember { mutableStateOf<String?>(null) }
+    var comfyPairingBusy by remember { mutableStateOf(false) }
+
     LaunchedEffect(registered) {
         if (registered) {
+            health = HealthApi.fetch()
             githubConnected = InstallationRepository.fetchGitHubConnectionStatus().first
         }
     }
 
+    if (selectedTool != null) {
+        BackHandler { selectedTool = null }
+        ToolDetailScreen(
+            tool = selectedTool!!,
+            showSnackbar = showSnackbar,
+            onBack = { selectedTool = null },
+            onAction = {
+                if (selectedTool?.id == "comfyui") {
+                    comfyPairingBusy = true
+                    scope.launch {
+                        val issued = PairingApi.issueCode()
+                        comfyPairingBusy = false
+                        if (issued == null) {
+                            showSnackbar("Unable to start ComfyUI connection")
+                        } else {
+                            comfyPairingCode = issued.code
+                        }
+                    }
+                }
+            },
+            actionBusy = comfyPairingBusy,
+        )
+        if (comfyPairingCode != null) {
+            ComfyPairingDialog(
+                code = comfyPairingCode!!,
+                onClose = { comfyPairingCode = null },
+                showSnackbar = showSnackbar,
+            )
+        }
+        return
+    }
+
+    val scopeForJump = rememberCoroutineScope()
+    val agentsTop = remember { BringIntoViewRequester() }
+    val creativeTop = remember { BringIntoViewRequester() }
     Column(
         Modifier
             .fillMaxSize()
@@ -105,63 +148,31 @@ fun ConnectionsScreen(
             stringResource(R.string.connections_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 12.dp),
+            modifier = Modifier.padding(top = 16.dp),
         )
-
-        // ---- GitHub card ----
-        val connectLauncher = rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) {
-            // Returning from the GitHub page: re-poll; the status read
-            // completes the owner-scoped join for this device.
-            scope.launch {
-                githubConnected = InstallationRepository.fetchGitHubConnectionStatus().first
-            }
-        }
-        val openGitHubPage = {
-            val intent = Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse(com.pigeonhub.app.push.installation.GitHubConnect.installUrl()),
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            connectLauncher.launch(intent)
-            Unit
-        }
-        ElevatedCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CardHeader(
-                    icon = {
-                        Image(
-                            painter = painterResource(R.drawable.ic_github_mark),
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimaryContainer),
-                            modifier = Modifier.size(24.dp),
-                        )
-                    },
-                    title = stringResource(R.string.github_title),
-                    tagline = stringResource(R.string.github_tagline),
-                )
-                StatusChip(
-                    connected = githubConnected,
-                    connectedText = stringResource(R.string.github_connected),
-                    notConnectedText = stringResource(R.string.github_not_connected),
-                )
-                HealthLine(HealthApi.merge(health, "github"), now)
-                if (githubConnected) {
-                    // Already connected: the GitHub page is for managing watched
-                    // repos — offered as a secondary action, not a confusing
-                    // full-width primary "Connect".
-                    OutlinedButton(onClick = openGitHubPage, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.github_manage))
-                    }
-                } else {
-                    Button(onClick = openGitHubPage, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.github_connect))
-                    }
-                }
-            }
+        Text(
+            stringResource(R.string.connections_intro),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(
+                onClick = { scopeForJump.launch { agentsTop.bringIntoView() } },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.connections_jump_agents)) }
+            FilledTonalButton(
+                onClick = { scopeForJump.launch { creativeTop.bringIntoView() } },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.connections_jump_creative)) }
         }
 
-        // ---- My Push (existing push channel management) ----
+        SectionLabel(stringResource(R.string.connections_my_pc), stringResource(R.string.connections_my_pc_subtitle))
+        GitHubConnectionCard(
+            connected = githubConnected,
+            health = HealthApi.merge(health, "github"),
+            now = now,
+            onRefresh = { scope.launch { githubConnected = InstallationRepository.fetchGitHubConnectionStatus().first } },
+        )
         if (registered) {
             MyPushCard(
                 endpoint = installState.endpoint,
@@ -171,242 +182,236 @@ fun ConnectionsScreen(
             )
         }
 
-        // ---- AI Agents (MVP-009: hook-based connector) ----
-        AiAgentCard(showSnackbar = showSnackbar, health = HealthApi.merge(health, "agent"), now = now)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(agentsTop),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SectionLabel(stringResource(R.string.connections_ai_agents), stringResource(R.string.connections_ai_agents_subtitle))
+            AiAgentCards(health = health, now = now) { selectedTool = it }
+        }
 
-        // ---- ComfyUI / connectors (MVP-007/012) ----
-        ComfyUiCard(
-            showSnackbar = showSnackbar,
-            health = HealthApi.merge(health, "comfyui", "cli", "push"),
-            now = now,
-        )
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(creativeTop),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SectionLabel(stringResource(R.string.connections_creative_video), stringResource(R.string.connections_creative_video_subtitle))
+            CreativeToolCards(health = health, now = now) { selectedTool = it }
+        }
 
-        // ---- Custom ----
-        HowToCard(
-            icon = Icons.Outlined.Api,
+        SectionLabel(stringResource(R.string.connections_advanced), stringResource(R.string.connections_advanced_subtitle))
+        val customTool = ToolSpec(
+            id = "custom",
             title = stringResource(R.string.custom_title),
-            tagline = stringResource(R.string.custom_tagline),
-            howtoTitle = stringResource(R.string.connections_howto),
-            howtoBody = stringResource(R.string.connections_connect_automation_body),
-            curlLabel = stringResource(R.string.connections_copy_curl),
-            copiedMessage = stringResource(R.string.connections_curl_copied),
-            showSnackbar = showSnackbar,
+            description = stringResource(R.string.custom_tagline),
+            status = stringResource(R.string.tool_status_cli_supported),
+            action = stringResource(R.string.tool_action_howto),
+            icon = Icons.Outlined.Api,
+            details = stringResource(R.string.custom_detail),
+            command = "python connectors/pigeonhub_connector.py run --name \"My task\" -- <your command>",
         )
-
+        ToolCard(customTool, HealthApi.merge(health, "cli"), now) { selectedTool = customTool }
         Spacer(Modifier.height(16.dp))
     }
 }
 
+private data class ToolSpec(
+    val id: String,
+    val title: String,
+    val description: String,
+    val status: String,
+    val action: String,
+    val icon: ImageVector,
+    val details: String,
+    val command: String? = null,
+)
+
 @Composable
-private fun MyPushCard(
-    endpoint: String?,
-    health: HealthApi.ConnectorHealth?,
+private fun AiAgentCards(
+    health: Map<String, HealthApi.ConnectorHealth>,
     now: Long,
-    showSnackbar: (String) -> Unit,
+    onSelect: (ToolSpec) -> Unit,
 ) {
+    val specs = listOf(
+        ToolSpec("claude", "Claude", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "python connectors/pigeonhub_connector.py run --name \"Claude task\" -- <your command>"),
+        ToolSpec("codex", "Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "python connectors/pigeonhub_connector.py run --name \"Codex task\" -- <your command>"),
+        ToolSpec("zai", "z.ai", stringResource(R.string.tool_zai_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.Star, stringResource(R.string.tool_zai_detail)),
+        ToolSpec("chatgpt", "ChatGPT", stringResource(R.string.tool_chatgpt_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.Chat, stringResource(R.string.tool_chatgpt_detail)),
+        ToolSpec("antigravity", "Antigravity", stringResource(R.string.tool_antigravity_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.RocketLaunch, stringResource(R.string.tool_antigravity_detail)),
+        ToolSpec("custom-agent", stringResource(R.string.tool_custom_agent_title), stringResource(R.string.tool_custom_agent_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.SmartToy, stringResource(R.string.tool_custom_agent_detail), "python connectors/pigeonhub_connector.py run --name \"Custom agent task\" -- <your command>"),
+    )
+    specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, "agent", "cli"), now) { onSelect(tool) } }
+}
+
+@Composable
+private fun CreativeToolCards(
+    health: Map<String, HealthApi.ConnectorHealth>,
+    now: Long,
+    onSelect: (ToolSpec) -> Unit,
+) {
+    val specs = listOf(
+        ToolSpec("comfyui", "ComfyUI", stringResource(R.string.tool_comfyui_description), comfyStatus(health), comfyAction(health), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_comfyui_detail)),
+        ToolSpec("framepack", "FramePack", stringResource(R.string.tool_framepack_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Movie, stringResource(R.string.tool_framepack_detail), "python connectors/pigeonhub_connector.py run --name \"FramePack generation\" -- <your command>"),
+        ToolSpec("topaz", "Topaz Video AI", stringResource(R.string.tool_topaz_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Build, stringResource(R.string.tool_topaz_detail), "python connectors/pigeonhub_connector.py run --name \"Topaz Video AI\" -- <your command>"),
+        ToolSpec("blender", "Blender", stringResource(R.string.tool_blender_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Extension, stringResource(R.string.tool_blender_detail), "python connectors/pigeonhub_connector.py run --name \"Blender render\" -- blender -b project.blend -a"),
+    )
+    specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, if (tool.id == "comfyui") "comfyui" else "cli"), now) { onSelect(tool) } }
+}
+
+@Composable
+private fun comfyStatus(health: Map<String, HealthApi.ConnectorHealth>): String = when (HealthApi.merge(health, "comfyui")?.state) {
+    HealthApi.State.CONNECTED -> stringResource(R.string.tool_status_connected)
+    HealthApi.State.DEGRADED -> stringResource(R.string.health_degraded)
+    HealthApi.State.DISCONNECTED -> stringResource(R.string.health_disconnected)
+    else -> stringResource(R.string.tool_status_setup_available)
+}
+
+@Composable
+private fun comfyAction(health: Map<String, HealthApi.ConnectorHealth>): String = when (HealthApi.merge(health, "comfyui")?.state) {
+    HealthApi.State.CONNECTED -> stringResource(R.string.tool_action_manage)
+    else -> stringResource(R.string.tool_action_connect)
+}
+
+@Composable
+private fun ToolCard(tool: ToolSpec, health: HealthApi.ConnectorHealth?, now: Long, onClick: () -> Unit) {
+    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CardHeader(
+                icon = { Icon(tool.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp)) },
+                title = tool.title,
+                tagline = tool.description,
+            )
+            if (tool.id == "comfyui") HealthLine(health, now)
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatusPill(tool.status, tool.status == stringResource(R.string.tool_status_connected))
+                Spacer(Modifier.weight(1f))
+                Text(tool.action, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Outlined.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(text: String, positive: Boolean) {
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(if (positive) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (positive) Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun SectionLabel(title: String, subtitle: String, modifier: Modifier = Modifier) {
+    Column(modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ToolDetailScreen(tool: ToolSpec, showSnackbar: (String) -> Unit, onBack: () -> Unit, onAction: () -> Unit, actionBusy: Boolean) {
+    val clipboard = LocalClipboardManager.current
+    val copiedMessage = stringResource(R.string.common_copied)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        TextButtonLike(stringResource(R.string.common_back), onBack)
+        CardHeader(icon = { Icon(tool.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp)) }, title = tool.title, tagline = tool.description)
+        StatusPill(tool.status, tool.status == stringResource(R.string.tool_status_connected))
+        Text(tool.details, style = MaterialTheme.typography.bodyLarge)
+        if (tool.id == "comfyui") {
+            Text(stringResource(R.string.comfyui_setup_steps), style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = onAction, enabled = !actionBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                if (actionBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else Text(if (tool.status == stringResource(R.string.tool_status_connected)) stringResource(R.string.tool_action_manage) else stringResource(R.string.tool_action_connect))
+            }
+        } else if (tool.command != null) {
+            Text(stringResource(R.string.tool_usage_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.tool_usage_steps), style = MaterialTheme.typography.bodyMedium)
+            SelectionContainer { Text(tool.command, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
+            FilledTonalButton(onClick = { clipboard.setText(AnnotatedString(tool.command)); showSnackbar(copiedMessage) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.tool_copy_command)) }
+        }
+    }
+}
+
+@Composable
+private fun TextButtonLike(text: String, onClick: () -> Unit) {
+    androidx.compose.material3.TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹  $text") }
+}
+
+@Composable
+private fun ComfyPairingDialog(code: String, onClose: () -> Unit, showSnackbar: (String) -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val copiedMessage = stringResource(R.string.common_copied)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(stringResource(R.string.comfyui_pairing_title)) },
+        text = { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { QrCode(payload = code); Text(stringResource(R.string.comfyui_pairing_hint), style = MaterialTheme.typography.bodyMedium); Text(code, style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold) } },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { clipboard.setText(AnnotatedString(code)); showSnackbar(copiedMessage) }) { Text(stringResource(R.string.common_copy)) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onClose) { Text(stringResource(R.string.common_close)) } },
+    )
+}
+
+@Composable
+private fun GitHubConnectionCard(connected: Boolean, health: HealthApi.ConnectorHealth?, now: Long, onRefresh: () -> Unit) {
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { onRefresh() }
+    val open = { launcher.launch(Intent(Intent.ACTION_VIEW, Uri.parse(com.pigeonhub.app.push.installation.GitHubConnect.installUrl()))); Unit }
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CardHeader(icon = { Image(painterResource(R.drawable.ic_github_mark), null, colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimaryContainer), modifier = Modifier.size(24.dp)) }, title = stringResource(R.string.github_title), tagline = stringResource(R.string.github_tagline))
+            StatusPill(if (connected) stringResource(R.string.github_connected) else stringResource(R.string.github_not_connected), connected)
+            HealthLine(health, now)
+            if (connected) OutlinedButton(onClick = open, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.github_manage)) }
+            else Button(onClick = open, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.github_connect)) }
+        }
+    }
+}
+
+@Composable
+private fun MyPushCard(endpoint: String?, health: HealthApi.ConnectorHealth?, now: Long, showSnackbar: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
+    var expanded by remember { mutableStateOf(false) }
+    var testBusy by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<String?>(null) }
     val copiedMsg = stringResource(R.string.connections_curl_copied)
     val testDone = stringResource(R.string.connections_test_done)
     val testMessage = stringResource(R.string.connections_test_message)
     val testFailedFmt = stringResource(R.string.connections_test_failed)
-
-    var testBusy by remember { mutableStateOf(false) }
-    var testResult by remember { mutableStateOf<String?>(null) }
-
     ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            CardHeader(
-                icon = {
-                    Icon(
-                        Icons.Outlined.Send,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp),
-                    )
-                },
-                title = stringResource(R.string.connections_mypush_title),
-                tagline = null,
-            )
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CardHeader(icon = { Icon(Icons.Outlined.Send, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp)) }, title = stringResource(R.string.connections_mypush_title), tagline = stringResource(R.string.connections_mypush_tagline))
+            StatusPill(stringResource(R.string.connections_status_connected), true)
             HealthLine(health, now)
-            StatusChip(
-                connected = true,
-                connectedText = stringResource(R.string.connections_status_connected),
-                notConnectedText = null,
-            )
-            Text(
-                stringResource(R.string.connections_endpoint_label),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            SelectionContainer {
-                Text(
-                    endpoint ?: "",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = {
-                    val curl = InstallationRepository.buildCurl()
-                    if (curl != null) {
-                        clipboard.setText(AnnotatedString(curl))
-                        showSnackbar(copiedMsg)
-                    }
-                }) {
-                    Text(stringResource(R.string.connections_copy_curl))
+            OutlinedButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (expanded) stringResource(R.string.connections_hide_advanced) else stringResource(R.string.connections_manage)) }
+            if (expanded) {
+                Text(stringResource(R.string.connections_advanced_automation), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.connections_automation_explanation), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.connections_endpoint_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SelectionContainer { Text(endpoint.orEmpty(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
+                FilledTonalButton(onClick = { InstallationRepository.buildCurl()?.let { curl -> clipboard.setText(AnnotatedString(curl)); showSnackbar(copiedMsg) } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.connections_copy_curl)) }
+                Button(onClick = { testBusy = true; testResult = null; scope.launch { val (ok, detail) = InstallationRepository.sendTestNotification("PigeonHub", testMessage); testBusy = false; testResult = if (ok) testDone else String.format(testFailedFmt, detail) } }, enabled = !testBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    if (testBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.connections_send_test))
                 }
-            }
-
-            // Real Worker → D1 → FCM → Android test notification
-            Button(
-                onClick = {
-                    testBusy = true
-                    testResult = null
-                    scope.launch {
-                        val (ok, detail) = InstallationRepository.sendTestNotification(
-                            title = "PigeonHub",
-                            message = testMessage,
-                        )
-                        withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            testBusy = false
-                            testResult = if (ok) testDone else String.format(testFailedFmt, detail)
-                        }
-                    }
-                },
-                enabled = !testBusy,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (testBusy) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(stringResource(R.string.connections_send_test))
-            }
-            testResult?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                testResult?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
 }
 
-/** Card header: 24dp glyph in a 40dp primary-container circle + title (+ tagline). */
+/** Shared icon container: all tool glyphs are optically 24dp inside 40dp. */
 @Composable
-internal fun CardHeader(
-    icon: @Composable () -> Unit,
-    title: String,
-    tagline: String?,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            Modifier
-                .clip(CircleShape)
-                .size(40.dp)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) { icon() }
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            if (tagline != null) {
-                Text(
-                    tagline,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusChip(
-    connected: Boolean,
-    connectedText: String,
-    notConnectedText: String?,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(
-            Icons.Filled.CheckCircle,
-            contentDescription = null,
-            tint = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            if (connected) connectedText else notConnectedText.orEmpty(),
-            style = MaterialTheme.typography.labelLarge,
-            color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/**
- * Informational card whose "How to connect" section expands in place —
- * the old design had a "Set up" button that only navigated to this same
- * tab (a dead end).
- */
-@Composable
-private fun HowToCard(
-    icon: ImageVector,
-    title: String,
-    tagline: String,
-    howtoTitle: String,
-    howtoBody: String,
-    curlLabel: String,
-    copiedMessage: String,
-    showSnackbar: (String) -> Unit,
-) {
-    val clipboard = LocalClipboardManager.current
-    var expanded by remember { mutableStateOf(false) }
-
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            CardHeader(
-                icon = {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp),
-                    )
-                },
-                title = title,
-                tagline = tagline,
-            )
-            FilledTonalButton(onClick = { expanded = !expanded }) {
-                Text(howtoTitle)
-            }
-            AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        howtoBody,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    FilledTonalButton(onClick = {
-                        val curl = InstallationRepository.buildCurl()
-                        if (curl != null) {
-                            clipboard.setText(AnnotatedString(curl))
-                            showSnackbar(copiedMessage)
-                        }
-                    }) {
-                        Text(curlLabel)
-                    }
-                }
-            }
+internal fun CardHeader(icon: @Composable () -> Unit, title: String, tagline: String?) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.clip(CircleShape).size(40.dp).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) { icon() }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            if (tagline != null) Text(tagline, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

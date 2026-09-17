@@ -55,6 +55,22 @@
 
     <!-- My Push / Connections -->
     <string name="connections_title">Connections</string>
+    <string name="connections_intro">Find your tools and see what PigeonHub can tell you about their long-running work.</string>
+    <string name="connections_jump_agents">AI Agents</string>
+    <string name="connections_jump_creative">Creative &amp; Video</string>
+    <string name="connections_my_pc">My PC</string>
+    <string name="connections_my_pc_subtitle">Your computer and the services already connected to PigeonHub.</string>
+    <string name="connections_ai_agents">AI Agents</string>
+    <string name="connections_ai_agents_subtitle">Get a notification when an agent finishes or needs your attention.</string>
+    <string name="connections_creative_video">Creative &amp; Video</string>
+    <string name="connections_creative_video_subtitle">Follow long image, video, and rendering jobs from your phone.</string>
+    <string name="connections_advanced">Advanced</string>
+    <string name="connections_advanced_subtitle">Generic command-line jobs and less common setups.</string>
+    <string name="connections_mypush_tagline">Send a quick test and keep your own job alerts in one place.</string>
+    <string name="connections_manage">Manage</string>
+    <string name="connections_hide_advanced">Hide details</string>
+    <string name="connections_advanced_automation">Automation details</string>
+    <string name="connections_automation_explanation">Use the private details below when you connect a script or automation. Your messages still arrive in the Job Inbox.</string>
     <string name="connections_mypush_title">My Push</string>
     <string name="connections_status_connected">Connected</string>
     <string name="connections_endpoint_label">Endpoint</string>
@@ -94,6 +110,7 @@
     <!-- Custom -->
     <string name="custom_title">Custom</string>
     <string name="custom_tagline">Connect anything with an API</string>
+    <string name="custom_detail">Automatic connections are not set up for this tool yet. You can still use the shared command-line job wrapper to receive progress, completion, and failure alerts.</string>
     <string name="custom_setup">Set up</string>
 
     <!-- Delivery states -->
@@ -145,11 +162,41 @@
     <string name="comfyui_pairing_failed">Failed to issue a pairing code</string>
     <string name="comfyui_pairing_revoked">Pairing codes revoked</string>
 
-    <!-- AI agent connector (MVP-009) -->
-    <string name="agents_howto_body">Add lifecycle hooks to your CLI agent (Claude Code, Codex, …). When the agent starts, waits for you, or finishes, PigeonHub turns that into a job alert.</string>
-    <string name="agents_copy_start">Copy start hook</string>
-    <string name="agents_copy_attention">Copy attention hook</string>
-    <string name="agents_copy_done">Copy stop hook</string>
+    <!-- Tool directory -->
+    <string name="tool_status_connected">Connected</string>
+    <string name="tool_status_setup_available">Setup available</string>
+    <string name="tool_status_cli_supported">CLI supported</string>
+    <string name="tool_status_coming_soon">Coming soon</string>
+    <string name="tool_action_connect">Connect</string>
+    <string name="tool_action_manage">Manage</string>
+    <string name="tool_action_howto">How to use</string>
+    <string name="tool_usage_title">How it works</string>
+    <string name="tool_usage_steps">1. Connect your PC to PigeonHub.
+2. Put the command after the shared job wrapper.
+3. Leave the work running — PigeonHub reports progress, completion, or failure.</string>
+    <string name="tool_copy_command">Copy example</string>
+    <string name="comfyui_setup_steps">On your PC, open the PigeonHub connector and scan or enter this one-time code. The connection is complete only after the PC confirms it.</string>
+    <string name="tool_comfyui_description">Get notified when your image or video workflow progresses or finishes.</string>
+    <string name="tool_comfyui_detail">ComfyUI has a real workflow connection. PigeonHub keeps its connection health here and turns workflow progress and completion into Job Inbox updates.</string>
+    <string name="tool_claude_description">Get notified when a Claude task finishes or needs your attention.</string>
+    <string name="tool_claude_detail">Claude can use the shared command-line job wrapper. PigeonHub does not create a separate Claude connection.</string>
+    <string name="tool_codex_description">Get notified when a Codex task finishes or needs your attention.</string>
+    <string name="tool_codex_detail">Codex can use the shared command-line job wrapper. PigeonHub does not create a separate Codex connection.</string>
+    <string name="tool_zai_description">Keep an eye on z.ai work from the Job Inbox.</string>
+    <string name="tool_zai_detail">Automatic z.ai connection is coming soon. Use the shared command-line route when your local setup can run a command.</string>
+    <string name="tool_chatgpt_description">Keep an eye on ChatGPT work from the Job Inbox.</string>
+    <string name="tool_chatgpt_detail">Automatic ChatGPT connection is coming soon. This card does not claim that ChatGPT is connected.</string>
+    <string name="tool_antigravity_description">Keep an eye on Antigravity work from the Job Inbox.</string>
+    <string name="tool_antigravity_detail">Automatic Antigravity connection is coming soon. This card does not claim that Antigravity is connected.</string>
+    <string name="tool_custom_agent_title">Custom Agent</string>
+    <string name="tool_custom_agent_description">Use one shared route for an agent that is not listed.</string>
+    <string name="tool_custom_agent_detail">There is no vendor-specific connection here. Wrap a local command to receive the same progress, completion, and failure alerts.</string>
+    <string name="tool_framepack_description">Get notified when a long video generation finishes or fails.</string>
+    <string name="tool_framepack_detail">FramePack is supported through the shared command-line wrapper. The example keeps the actual FramePack command as a placeholder because it depends on your local install.</string>
+    <string name="tool_topaz_description">Get notified when upscaling, interpolation, or video processing finishes.</string>
+    <string name="tool_topaz_detail">Topaz Video AI is supported through the shared command-line wrapper. No separate service setup or credential is needed here.</string>
+    <string name="tool_blender_description">Get notified when a long render finishes or fails.</string>
+    <string name="tool_blender_detail">Blender is supported through the shared command-line wrapper. The example uses Blender background rendering and the current wrapper argument contract.</string>
 
     <!-- Job alerts (MVP-010) -->
     <string name="settings_job_alerts_title">Job alerts</string>

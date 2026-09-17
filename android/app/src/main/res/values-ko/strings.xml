@@ -51,6 +51,22 @@
     <string name="onboarding_recovery_body">이 기기의 PigeonHub 자격 증명을 보호하는 암호화 키를 더 이상 사용할 수 없어요. PigeonHub는 기존 설치를 덮어쓰지 않아요 — 앱을 다시 설치하고 새 초대 코드를 사용해 주세요.</string>
 
     <string name="connections_title">연결</string>
+    <string name="connections_intro">내가 쓰는 도구를 찾고, 오래 걸리는 작업을 PigeonHub가 어떻게 알려주는지 확인하세요.</string>
+    <string name="connections_jump_agents">AI 에이전트</string>
+    <string name="connections_jump_creative">창작·영상</string>
+    <string name="connections_my_pc">내 PC</string>
+    <string name="connections_my_pc_subtitle">컴퓨터와 PigeonHub에 이미 연결된 서비스예요.</string>
+    <string name="connections_ai_agents">AI 에이전트</string>
+    <string name="connections_ai_agents_subtitle">에이전트가 끝나거나 확인이 필요할 때 알려드려요.</string>
+    <string name="connections_creative_video">창작·영상</string>
+    <string name="connections_creative_video_subtitle">이미지·영상·렌더링 작업을 휴대폰에서 확인하세요.</string>
+    <string name="connections_advanced">고급</string>
+    <string name="connections_advanced_subtitle">일반 명령줄 작업과 아직 목록에 없는 연결이에요.</string>
+    <string name="connections_mypush_tagline">간단한 테스트를 보내고 내 작업 알림을 한곳에서 관리해요.</string>
+    <string name="connections_manage">관리</string>
+    <string name="connections_hide_advanced">상세 닫기</string>
+    <string name="connections_advanced_automation">자동화 상세</string>
+    <string name="connections_automation_explanation">스크립트나 자동화를 연결할 때만 아래 상세 정보를 사용하세요. 메시지는 계속 작업 수신함에 도착해요.</string>
     <string name="connections_mypush_title">내 알림 채널</string>
     <string name="connections_status_connected">연결됨</string>
     <string name="connections_endpoint_label">엔드포인트</string>
@@ -87,6 +103,7 @@
 
     <string name="custom_title">사용자 지정</string>
     <string name="custom_tagline">API로 원하는 작업을 연결하세요</string>
+    <string name="custom_detail">이 도구의 자동 연결은 아직 준비되지 않았어요. 공통 명령줄 작업 래퍼를 사용하면 진행·완료·실패 알림을 받을 수 있어요.</string>
     <string name="custom_setup">설정</string>
 
     <string name="delivery_server_accepted">서버에 저장했어요. 이 기기에서의 수신은 아직 확인되지 않았어요.</string>
@@ -135,11 +152,40 @@
     <string name="comfyui_pairing_failed">연결 코드를 만들지 못했어요</string>
     <string name="comfyui_pairing_revoked">연결 코드를 취소했어요</string>
 
-    <!-- AI agent connector (MVP-009) -->
-    <string name="agents_howto_body">CLI 에이전트(Claude Code, Codex 등)에 lifecycle hook을 추가하세요. 에이전트가 시작하거나, 확인을 기다리거나, 끝나면 PigeonHub가 잡 알림으로 바꿔드려요.</string>
-    <string name="agents_copy_start">시작 hook 복사</string>
-    <string name="agents_copy_attention">확인 hook 복사</string>
-    <string name="agents_copy_done">종료 hook 복사</string>
+    <string name="tool_status_connected">연결됨</string>
+    <string name="tool_status_setup_available">설정 가능</string>
+    <string name="tool_status_cli_supported">CLI 지원</string>
+    <string name="tool_status_coming_soon">준비 중</string>
+    <string name="tool_action_connect">연결하기</string>
+    <string name="tool_action_manage">관리</string>
+    <string name="tool_action_howto">사용 방법</string>
+    <string name="tool_usage_title">사용 방법</string>
+    <string name="tool_usage_steps">1. PC를 PigeonHub에 연결합니다.
+2. 공통 작업 래퍼 뒤에 실행 명령을 붙입니다.
+3. 작업을 실행하면 진행·완료·실패를 알려드려요.</string>
+    <string name="tool_copy_command">예시 복사</string>
+    <string name="comfyui_setup_steps">PC에서 PigeonHub 커넥터를 열고 이 1회용 코드를 스캔하거나 입력하세요. PC에서 확인을 마쳐야 연결이 완료돼요.</string>
+    <string name="tool_comfyui_description">이미지·영상 생성 작업의 진행과 완료를 알려드려요.</string>
+    <string name="tool_comfyui_detail">ComfyUI는 실제 워크플로 연결을 지원해요. PigeonHub가 연결 상태를 표시하고 워크플로 진행과 완료를 작업 수신함에 알려드려요.</string>
+    <string name="tool_claude_description">Claude 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>
+    <string name="tool_claude_detail">Claude는 공통 명령줄 작업 래퍼로 사용할 수 있어요. 별도의 Claude 연결을 만들지는 않아요.</string>
+    <string name="tool_codex_description">Codex 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>
+    <string name="tool_codex_detail">Codex는 공통 명령줄 작업 래퍼로 사용할 수 있어요. 별도의 Codex 연결을 만들지는 않아요.</string>
+    <string name="tool_zai_description">z.ai 작업을 작업 수신함에서 확인하세요.</string>
+    <string name="tool_zai_detail">z.ai 자동 연결은 준비 중이에요. 로컬에서 명령을 실행할 수 있다면 공통 명령줄 경로를 사용할 수 있어요.</string>
+    <string name="tool_chatgpt_description">ChatGPT 작업을 작업 수신함에서 확인하세요.</string>
+    <string name="tool_chatgpt_detail">ChatGPT 자동 연결은 준비 중이에요. 이 카드는 ChatGPT가 연결됐다는 뜻이 아니에요.</string>
+    <string name="tool_antigravity_description">Antigravity 작업을 작업 수신함에서 확인하세요.</string>
+    <string name="tool_antigravity_detail">Antigravity 자동 연결은 준비 중이에요. 이 카드는 Antigravity가 연결됐다는 뜻이 아니에요.</string>
+    <string name="tool_custom_agent_title">커스텀 에이전트</string>
+    <string name="tool_custom_agent_description">목록에 없는 에이전트도 하나의 공통 경로로 연결해요.</string>
+    <string name="tool_custom_agent_detail">특정 업체 전용 연결은 없어요. 로컬 명령을 감싸면 같은 진행·완료·실패 알림을 받을 수 있어요.</string>
+    <string name="tool_framepack_description">긴 영상 생성이 끝나거나 실패하면 알려드려요.</string>
+    <string name="tool_framepack_detail">FramePack은 공통 명령줄 래퍼로 지원해요. 설치 방식에 따라 명령이 달라 실제 명령은 자리표시자로 남겨뒀어요.</string>
+    <string name="tool_topaz_description">업스케일·프레임 보간·영상 처리가 끝나면 알려드려요.</string>
+    <string name="tool_topaz_detail">Topaz Video AI는 공통 명령줄 래퍼로 지원해요. 여기서 별도 서비스 설정이나 인증 정보를 요구하지 않아요.</string>
+    <string name="tool_blender_description">오래 걸리는 렌더링이 끝나거나 실패하면 알려드려요.</string>
+    <string name="tool_blender_detail">Blender는 공통 명령줄 래퍼로 지원해요. 예시는 Blender 백그라운드 렌더링과 현재 래퍼 인자 규약을 사용해요.</string>
 
     <!-- Job alerts (MVP-010) -->
     <string name="settings_job_alerts_title">잡 알림</string>
