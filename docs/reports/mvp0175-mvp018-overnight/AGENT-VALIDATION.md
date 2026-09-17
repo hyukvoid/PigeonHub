@@ -65,7 +65,39 @@ named, not papered over.
 
 | Gate | Status | Evidence |
 |---|---|---|
-| (filled below after regression run) | | |
+| SETUP_PREVIEW | V | Preview named `~/.codex/hooks.json` + events; codex 0.152.1 detected |
+| CONFIRM | V | `--yes` gate enforced |
+| APPLY | V | File created (no backup needed for new file), atomic write |
+| IDEMPOTENT_REAPPLY | V | "Nothing to change" after converged apply; user hooks preserved on re-apply |
+| REMOVE | V | Remove + backup created; reinstall restored exactly the managed set |
+| REINSTALL | V | Verified after an interleaved debug hook was manually removed |
+| REAL_START | V | **Real** `codex exec` session (trust-bypassed): SessionStart hook → RUNNING published, `fcm_accepted` (D1 16:44:49Z, job `agent-codex-01a0b041-…`) |
+| REAL_DONE | V | Stop hook of the same real session → DONE, `fcm_accepted` (16:44:53Z); Android card "Codex · Codex session — Done, 2 updates" |
+| REAL_FAILED | — | Codex hook contract has no terminal-failure event; FAILED path remains covered by unit tests |
+| REAL_NEEDS_ACTION | I | PermissionRequest hook registered; not reproducible headlessly (no interactive permission prompt in `exec`) |
+| ANDROID_CARD | V | `evidence/codex-zcode-inbox.png` |
+| SYSTEM_PUSH | V | RUNNING+DONE both `push_status=fcm_accepted` to the live device channel |
+| HEALTH | I | Rides MVP-015 per-source health (source=codex) |
+
+### Codex findings
+
+1. **Codex requires one-time hook trust.** Hooks in `~/.codex/hooks.json` do
+   not run until the user trusts them via `/hooks` in the Codex TUI (or a
+   per-invocation `--dangerously-bypass-hook-trust`). Real sessions without
+   trust show "hook: Stop" lines but never execute the handlers — this silently
+   explains any "setup succeeded but nothing arrived" report. Owner one-time
+   action: run `/hooks` in Codex and approve the PigeonHub handlers. The E2E
+   above used the documented per-invocation bypass flag; no trust state was
+   modified.
+2. **Payload privacy verified against the real wire format.** Captured a real
+   Stop payload: `{cwd, hook_event_name, last_assistant_message, model,
+   permission_mode, session_id, stop_hook_active, transcript_path, turn_id}`.
+   `last_assistant_message` and `transcript_path` are present on the wire and
+   confirmed NOT forwarded by the normalizer (D1 `result_summary` stayed
+   "Agent session completed").
+3. Codex passes the payload on stdin, Claude-compatible field names
+   (`hook_event_name`, `session_id`) — matches the MVP-017 adapter assumptions.
+
 
 ## Claude Code
 
