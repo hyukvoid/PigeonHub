@@ -14,7 +14,15 @@ import { canonicalRequestHash } from "./d1.js";
 import { validateAgentEvent, type ValidatedAgentEvent } from "./agent_event.js";
 import { validateJobEvent, type ValidatedJobEvent } from "./jobs.js";
 import { shouldEmitJobEvent } from "./job_coalescing.js";
-import { issuePairingCode, redeemPairingCode, revokePairingCodes, isValidConnectorToken } from "./pairing.js";
+import {
+  approveLoginRequest,
+  createLoginRequest,
+  issuePairingCode,
+  pollLoginRequest,
+  redeemPairingCode,
+  revokePairingCodes,
+  isValidConnectorToken,
+} from "./pairing.js";
 import { recordConnectorSeen, getChannelHealth, deriveState } from "./health.js";
 import { validatePush } from "./validate.js";
 import type { Env, PushRequest, ResolvedPush } from "./types.js";
@@ -731,6 +739,47 @@ export default {
           retention_floor_seq: retentionFloor,
           history_truncated: historyTruncated,
         });
+      });
+    }
+
+    // ---- MVP-016: PC-first connector login ----
+    // The request itself is intentionally unauthenticated; its high-entropy
+    // poll secret is returned only to the PC process and is required to fetch
+    // the connector token after the Android user approves the QR.
+    if (url.pathname === "/v1/pairing/requests" && request.method === "POST") {
+      const issue = await createLoginRequest(env);
+      return json({ ok: true, ...issue, ttl_seconds: 600 });
+    }
+
+    if (url.pathname === "/v1/pairing/requests/poll" && request.method === "POST") {
+      const body = await parseJsonBody(request);
+      if (body === null) return json({ ok: false, error: "body is not valid JSON" }, 400);
+      const requestId = stringField(body, "request_id");
+      const pollSecret = stringField(body, "poll_secret");
+      if (!requestId || !pollSecret) return json({ ok: false, error: "request_id and poll_secret are required" }, 400);
+      const result = await pollLoginRequest(env, url.origin, requestId, pollSecret);
+      if ("error" in result) {
+        const status = result.error.includes("expired") ? 410 : 403;
+        return json({ ok: false, error: result.error }, status);
+      }
+      return json({ ok: true, ...result });
+    }
+
+    const approveLoginMatch = /^\/v1\/pairing\/requests\/([^/]+)\/approve$/.exec(url.pathname);
+    if (approveLoginMatch && request.method === "POST") {
+      return requireInstallation(request, env, async (installation) => {
+        const body = await parseJsonBody(request);
+        if (body === null) return json({ ok: false, error: "body is not valid JSON" }, 400);
+        const challenge = stringField(body, "challenge");
+        if (!challenge) return json({ ok: false, error: "challenge is required" }, 400);
+        const channel = await getChannelByInstallation(env, installation.id);
+        if (!channel) return json({ ok: false, error: "channel missing" }, 500);
+        const result = await approveLoginRequest(env, approveLoginMatch[1], challenge, installation.id, channel.id);
+        if ("error" in result) {
+          const status = result.error.includes("expired") ? 410 : 403;
+          return json({ ok: false, error: result.error }, status);
+        }
+        return json({ ok: true, ...result });
       });
     }
 

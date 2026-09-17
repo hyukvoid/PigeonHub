@@ -56,6 +56,10 @@
     <string name="connections_jump_creative">창작·영상</string>
     <string name="connections_my_pc">내 PC</string>
     <string name="connections_my_pc_subtitle">컴퓨터와 PigeonHub에 이미 연결된 서비스예요.</string>
+    <string name="cli_connection_title">PigeonHub CLI</string>
+    <string name="cli_connection_tagline">pigeonhub login을 실행한 PC를 연결해요.</string>
+    <string name="cli_connection_body">PC에서 pigeonhub login을 실행한 뒤 QR을 여기서 스캔해 연결을 승인하세요.</string>
+    <string name="cli_connection_action">PC 연결</string>
     <string name="connections_ai_agents">AI 에이전트</string>
     <string name="connections_ai_agents_subtitle">에이전트가 끝나거나 확인이 필요할 때 알려드려요.</string>
     <string name="connections_creative_video">창작·영상</string>
@@ -160,11 +164,15 @@
     <string name="tool_action_manage">관리</string>
     <string name="tool_action_howto">사용 방법</string>
     <string name="tool_usage_title">사용 방법</string>
-    <string name="tool_usage_steps">1. PC를 PigeonHub에 연결합니다.
-2. 공통 작업 래퍼 뒤에 실행 명령을 붙입니다.
+    <string name="tool_usage_steps">1. PC에서 pigeonhub login을 한 번 실행하고 PigeonHub 앱에서 연결합니다.
+2. 실행할 명령을 pigeonhub run 뒤에 넣습니다.
 3. 작업을 실행하면 진행·완료·실패를 알려드려요.</string>
     <string name="tool_copy_command">예시 복사</string>
-    <string name="comfyui_setup_steps">PC에서 PigeonHub 커넥터를 열고 이 1회용 코드를 스캔하거나 입력하세요. PC에서 확인을 마쳐야 연결이 완료돼요.</string>
+    <string name="comfyui_setup_steps">PC에서 pigeonhub login을 실행한 뒤 PigeonHub가 보여주는 1회용 코드를 입력하거나 스캔하세요. PC에서 확인을 마쳐야 연결이 완료돼요.</string>
+    <string name="pairing_scan_title">이 PC를 연결할까요?</string>
+    <string name="pairing_scan_body">이 PC가 PigeonHub 계정에 연결하려고 해요. 직접 pigeonhub login을 실행한 PC일 때만 승인하세요.</string>
+    <string name="pairing_scan_approve">승인</string>
+    <string name="pairing_scan_cancel">취소</string>
     <string name="tool_comfyui_description">이미지·영상 생성 작업의 진행과 완료를 알려드려요.</string>
     <string name="tool_comfyui_detail">ComfyUI는 실제 워크플로 연결을 지원해요. PigeonHub가 연결 상태를 표시하고 워크플로 진행과 완료를 작업 수신함에 알려드려요.</string>
     <string name="tool_claude_description">Claude 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>

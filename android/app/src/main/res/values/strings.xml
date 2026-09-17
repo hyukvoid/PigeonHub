@@ -60,6 +60,10 @@
     <string name="connections_jump_creative">Creative &amp; Video</string>
     <string name="connections_my_pc">My PC</string>
     <string name="connections_my_pc_subtitle">Your computer and the services already connected to PigeonHub.</string>
+    <string name="cli_connection_title">PigeonHub CLI</string>
+    <string name="cli_connection_tagline">Connect a PC running pigeonhub login.</string>
+    <string name="cli_connection_body">Start pigeonhub login on your PC, then scan its QR here to approve the connection.</string>
+    <string name="cli_connection_action">Connect a PC</string>
     <string name="connections_ai_agents">AI Agents</string>
     <string name="connections_ai_agents_subtitle">Get a notification when an agent finishes or needs your attention.</string>
     <string name="connections_creative_video">Creative &amp; Video</string>
@@ -171,11 +175,15 @@
     <string name="tool_action_manage">Manage</string>
     <string name="tool_action_howto">How to use</string>
     <string name="tool_usage_title">How it works</string>
-    <string name="tool_usage_steps">1. Connect your PC to PigeonHub.
-2. Put the command after the shared job wrapper.
+    <string name="tool_usage_steps">1. Run pigeonhub login once and connect this PC in the PigeonHub app.
+2. Put your command after pigeonhub run.
 3. Leave the work running — PigeonHub reports progress, completion, or failure.</string>
     <string name="tool_copy_command">Copy example</string>
-    <string name="comfyui_setup_steps">On your PC, open the PigeonHub connector and scan or enter this one-time code. The connection is complete only after the PC confirms it.</string>
+    <string name="comfyui_setup_steps">On your PC, run pigeonhub login, then enter or scan the one-time code shown by PigeonHub. The connection is complete only after the PC confirms it.</string>
+    <string name="pairing_scan_title">Connect this PC?</string>
+    <string name="pairing_scan_body">A PC is asking to connect to this PigeonHub account. Approve only if you started pigeonhub login on that PC.</string>
+    <string name="pairing_scan_approve">Approve</string>
+    <string name="pairing_scan_cancel">Cancel</string>
     <string name="tool_comfyui_description">Get notified when your image or video workflow progresses or finishes.</string>
     <string name="tool_comfyui_detail">ComfyUI has a real workflow connection. PigeonHub keeps its connection health here and turns workflow progress and completion into Job Inbox updates.</string>
     <string name="tool_claude_description">Get notified when a Claude task finishes or needs your attention.</string>

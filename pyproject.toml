@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pigeonhub-cli"
+version = "0.16.0"
+description = "PigeonHub command-line job lifecycle client"
+requires-python = ">=3.10"
+dependencies = ["qrcode>=7.4,<9"]
+
+[project.scripts]
+pigeonhub = "pigeonhub.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pigeonhub*"]

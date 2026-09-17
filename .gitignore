@@ -68,6 +68,12 @@ worker/.automation-credentials.json
 
 # local-only test credentials
 .test-invite-current
+
+# ---- Python ----
+
+__pycache__/
+*.py[cod]
+
 tools/comfyui/
 tools/comfyui-venv/
 ui.xml

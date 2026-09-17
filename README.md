@@ -23,6 +23,7 @@ runs in mock mode). The client pipeline is also fully exercisable locally
 | `worker/` | **Production transport**: Cloudflare Worker → D1 durable accept (idempotency, quota, seq) → OAuth2 (RS256 JWT) → FCM HTTP v1 (Workers/D1 **Free** plan) |
 | `server/` | Local dev sender (Fastify + firebase-admin) — kept as a regression/reference tool |
 | `docs/` | Setup guides, payload contract, session reports |
+| `pigeonhub/` | MVP-016 user-facing CLI: login, lifecycle wrapper, progress, notifications |
 
 > **Backend direction (decided):** production is **Cloudflare Workers + D1 + FCM**.
 > **Private installations are live**: a fresh Android install generates its own
@@ -32,6 +33,37 @@ runs in mock mode). The client pipeline is also fully exercisable locally
 > handling, no server-issued secrets. Reports:
 > [mvp-001b-d1-durable-core](docs/mvp-001b-d1-durable-core-report.md) ·
 > [mvp-001c-retry-safe-bootstrap](docs/mvp-001c-retry-safe-bootstrap-report.md)
+
+### PigeonHub CLI (MVP-016)
+
+The normal path is a declared command, not a background daemon:
+
+```bash
+python -m pip install -e .
+pigeonhub login
+pigeonhub run --name "Product crawler" -- python crawler.py
+```
+
+`pigeonhub login` creates a short-lived PC login request, displays a QR in the
+terminal, waits for the Android user to scan and approve it, and stores only
+the connector credential locally. The old `pair --code` / `--qr-image` path is
+retained for protocol compatibility.
+
+Inside a running command, the inherited job context makes lifecycle updates
+possible without a vendor-specific connector:
+
+```bash
+pigeonhub progress 42 100
+pigeonhub needs-action "Please choose the output folder"
+pigeonhub notify "Build note" "The cache was warmed"
+```
+
+`run` publishes `RUNNING` before starting the child. If that publish cannot be
+accepted, the child is not started. The child receives `PIGEONHUB_JOB_ID`, and
+its stdout, stderr, and exit code are preserved. `logout` removes the local
+credential; `status` reports local login and worker reachability.
+
+Windows single-executable packaging and installer/PATH work remain MVP-018.
 
 ### Worker quick start
 

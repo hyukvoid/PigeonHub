@@ -3,6 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:allowBackup="false"
@@ -22,6 +23,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.QrScannerActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
 
         <!-- FCM entry point. The service is compiled against firebase-messaging but
              stays completely inert until the project owner provides a real

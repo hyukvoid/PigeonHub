@@ -1,3 +1,40 @@
+# RESUME — MVP-016 CLI Core (2026-09-17)
+
+Branch: `autonomous/mvp016-cli-core-codex-20260917`.
+RC-001A Artemis UX was checkpointed at `eb2e65c` before this branch began.
+
+## Current state
+
+- `pigeonhub login/logout/status/notify/progress/needs-action/run` is implemented
+  as the dependency-light `pigeonhub/` package with a `pyproject.toml` console
+  entry point.
+- PC-first login creates a short-lived request, displays a terminal QR, waits
+  for Android approval, and atomically stores connector credentials.
+- Android Connections has a generic PigeonHub CLI PC card, Camera2 + ZXing
+  scanner, and explicit approval dialog. The old phone-issued `pair` path is
+  retained for compatibility.
+- `run` publishes RUNNING before process start, refuses to start on tracking
+  failure, injects `PIGEONHUB_JOB_ID`, preserves child stdout/stderr/exit code,
+  and reports terminal publish failures without masking that exit code.
+- Worker PC-first pairing routes are typechecked; apply `worker/schema_013.sql`
+  before using the flow against a deployed Worker.
+
+## Verified in this session
+
+- Python CLI tests: 5/5, including PC-first login polling and process lifecycle.
+- Worker `npm run typecheck`: pass.
+- Android debug assemble + unit tests: pass.
+- Android release assemble: pass.
+- `git diff --check`: pass; only CRLF normalization warnings remain.
+
+## Next operational step
+
+Apply/deploy `worker/schema_013.sql` to the intended Worker/D1 environment, then
+run a physical Android camera scan against `pigeonhub login`. MVP-018 remains
+responsible for a signed Windows single executable, installer, and PATH setup.
+
+---
+
 # RESUME — next session picks up here (2026-09-15, end of MVP-011.5→015 campaign)
 
 Branch: `autonomous/mvp0115-mvp015-predeploy-overnight-20260914` (from `b88b335`).

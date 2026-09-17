@@ -1,5 +1,6 @@
 package com.pigeonhub.app.push.installation
 
+import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -11,6 +12,19 @@ import org.json.JSONObject
 object PairingApi {
 
     data class IssuedCode(val code: String, val expiresAt: String)
+
+    /** Approve a PC-generated login QR after the user confirms the device. */
+    suspend fun approveLoginRequest(requestId: String, challenge: String): Boolean = withContext(Dispatchers.IO) {
+        val credentials = InstallationRepository.currentCredentialsForApi() ?: return@withContext false
+        val response = WorkerApi.request(
+            method = "POST",
+            url = "${InstallationRepository.workerOrigin()}/v1/pairing/requests/${Uri.encode(requestId)}/approve",
+            bearer = credentials.managementSecret,
+            bodyJson = JSONObject().put("challenge", challenge).toString(),
+        )
+        val json = runCatching { JSONObject(response.body) }.getOrNull()
+        response.code in 200..299 && (json?.optBoolean("ok") == true)
+    }
 
     suspend fun issueCode(): IssuedCode? = withContext(Dispatchers.IO) {
         val state = InstallationRepository.state.value

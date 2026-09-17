@@ -62,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -88,18 +89,47 @@ fun ConnectionsScreen(
     val installState by InstallationRepository.state.collectAsState()
     val registered = installState.status == BootstrapStatus.REGISTERED
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val now = rememberTickingNow()
     var health by remember { mutableStateOf<Map<String, HealthApi.ConnectorHealth>>(emptyMap()) }
     var githubConnected by remember { mutableStateOf(false) }
     var selectedTool by remember { mutableStateOf<ToolSpec?>(null) }
-    var comfyPairingCode by remember { mutableStateOf<String?>(null) }
-    var comfyPairingBusy by remember { mutableStateOf(false) }
+    var pendingPcLogin by remember { mutableStateOf<PcLoginRequest?>(null) }
+    var approvingPcLogin by remember { mutableStateOf(false) }
+
+    val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val payload = result.data?.getStringExtra(QrScannerActivity.EXTRA_PAYLOAD)
+        val request = payload?.let(::parsePcLoginPayload)
+        if (result.resultCode == android.app.Activity.RESULT_OK && request != null) {
+            pendingPcLogin = request
+        } else if (result.resultCode == android.app.Activity.RESULT_OK) {
+            showSnackbar("This is not a PigeonHub login QR")
+        }
+    }
 
     LaunchedEffect(registered) {
         if (registered) {
             health = HealthApi.fetch()
             githubConnected = InstallationRepository.fetchGitHubConnectionStatus().first
         }
+    }
+
+    if (pendingPcLogin != null) {
+        PcPairingApprovalDialog(
+            request = pendingPcLogin!!,
+            busy = approvingPcLogin,
+            onDismiss = { if (!approvingPcLogin) pendingPcLogin = null },
+            onApprove = {
+                approvingPcLogin = true
+                scope.launch {
+                    val request = pendingPcLogin
+                    val approved = request != null && PairingApi.approveLoginRequest(request.requestId, request.challenge)
+                    approvingPcLogin = false
+                    pendingPcLogin = null
+                    showSnackbar(if (approved) "PC connected" else "Unable to connect this PC")
+                }
+            },
+        )
     }
 
     if (selectedTool != null) {
@@ -110,27 +140,11 @@ fun ConnectionsScreen(
             onBack = { selectedTool = null },
             onAction = {
                 if (selectedTool?.id == "comfyui") {
-                    comfyPairingBusy = true
-                    scope.launch {
-                        val issued = PairingApi.issueCode()
-                        comfyPairingBusy = false
-                        if (issued == null) {
-                            showSnackbar("Unable to start ComfyUI connection")
-                        } else {
-                            comfyPairingCode = issued.code
-                        }
-                    }
+                    scannerLauncher.launch(Intent(context, QrScannerActivity::class.java))
                 }
             },
-            actionBusy = comfyPairingBusy,
+            actionBusy = false,
         )
-        if (comfyPairingCode != null) {
-            ComfyPairingDialog(
-                code = comfyPairingCode!!,
-                onClose = { comfyPairingCode = null },
-                showSnackbar = showSnackbar,
-            )
-        }
         return
     }
 
@@ -167,6 +181,10 @@ fun ConnectionsScreen(
         }
 
         SectionLabel(stringResource(R.string.connections_my_pc), stringResource(R.string.connections_my_pc_subtitle))
+        PcConnectionCard(
+            enabled = registered,
+            onConnect = { scannerLauncher.launch(Intent(context, QrScannerActivity::class.java)) },
+        )
         GitHubConnectionCard(
             connected = githubConnected,
             health = HealthApi.merge(health, "github"),
@@ -211,7 +229,7 @@ fun ConnectionsScreen(
             action = stringResource(R.string.tool_action_howto),
             icon = Icons.Outlined.Api,
             details = stringResource(R.string.custom_detail),
-            command = "python connectors/pigeonhub_connector.py run --name \"My task\" -- <your command>",
+            command = "pigeonhub run --name \"My task\" -- <your command>",
         )
         ToolCard(customTool, HealthApi.merge(health, "cli"), now) { selectedTool = customTool }
         Spacer(Modifier.height(16.dp))
@@ -229,6 +247,17 @@ private data class ToolSpec(
     val command: String? = null,
 )
 
+private data class PcLoginRequest(val requestId: String, val challenge: String)
+
+private fun parsePcLoginPayload(raw: String): PcLoginRequest? {
+    val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return null
+    if (uri.scheme != "pigeonhub" || uri.host != "login") return null
+    val requestId = uri.getQueryParameter("request_id") ?: return null
+    val challenge = uri.getQueryParameter("challenge") ?: return null
+    if (requestId.isBlank() || challenge.isBlank()) return null
+    return PcLoginRequest(requestId, challenge)
+}
+
 @Composable
 private fun AiAgentCards(
     health: Map<String, HealthApi.ConnectorHealth>,
@@ -236,12 +265,12 @@ private fun AiAgentCards(
     onSelect: (ToolSpec) -> Unit,
 ) {
     val specs = listOf(
-        ToolSpec("claude", "Claude", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "python connectors/pigeonhub_connector.py run --name \"Claude task\" -- <your command>"),
-        ToolSpec("codex", "Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "python connectors/pigeonhub_connector.py run --name \"Codex task\" -- <your command>"),
+        ToolSpec("claude", "Claude", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "pigeonhub run --name \"Claude task\" -- <your command>"),
+        ToolSpec("codex", "Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "pigeonhub run --name \"Codex task\" -- <your command>"),
         ToolSpec("zai", "z.ai", stringResource(R.string.tool_zai_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.Star, stringResource(R.string.tool_zai_detail)),
         ToolSpec("chatgpt", "ChatGPT", stringResource(R.string.tool_chatgpt_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.Chat, stringResource(R.string.tool_chatgpt_detail)),
         ToolSpec("antigravity", "Antigravity", stringResource(R.string.tool_antigravity_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.RocketLaunch, stringResource(R.string.tool_antigravity_detail)),
-        ToolSpec("custom-agent", stringResource(R.string.tool_custom_agent_title), stringResource(R.string.tool_custom_agent_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.SmartToy, stringResource(R.string.tool_custom_agent_detail), "python connectors/pigeonhub_connector.py run --name \"Custom agent task\" -- <your command>"),
+        ToolSpec("custom-agent", stringResource(R.string.tool_custom_agent_title), stringResource(R.string.tool_custom_agent_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.SmartToy, stringResource(R.string.tool_custom_agent_detail), "pigeonhub run --name \"Custom agent task\" -- <your command>"),
     )
     specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, "agent", "cli"), now) { onSelect(tool) } }
 }
@@ -254,9 +283,9 @@ private fun CreativeToolCards(
 ) {
     val specs = listOf(
         ToolSpec("comfyui", "ComfyUI", stringResource(R.string.tool_comfyui_description), comfyStatus(health), comfyAction(health), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_comfyui_detail)),
-        ToolSpec("framepack", "FramePack", stringResource(R.string.tool_framepack_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Movie, stringResource(R.string.tool_framepack_detail), "python connectors/pigeonhub_connector.py run --name \"FramePack generation\" -- <your command>"),
-        ToolSpec("topaz", "Topaz Video AI", stringResource(R.string.tool_topaz_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Build, stringResource(R.string.tool_topaz_detail), "python connectors/pigeonhub_connector.py run --name \"Topaz Video AI\" -- <your command>"),
-        ToolSpec("blender", "Blender", stringResource(R.string.tool_blender_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Extension, stringResource(R.string.tool_blender_detail), "python connectors/pigeonhub_connector.py run --name \"Blender render\" -- blender -b project.blend -a"),
+        ToolSpec("framepack", "FramePack", stringResource(R.string.tool_framepack_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Movie, stringResource(R.string.tool_framepack_detail), "pigeonhub run --name \"FramePack generation\" -- <your command>"),
+        ToolSpec("topaz", "Topaz Video AI", stringResource(R.string.tool_topaz_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Build, stringResource(R.string.tool_topaz_detail), "pigeonhub run --name \"Topaz Video AI\" -- <your command>"),
+        ToolSpec("blender", "Blender", stringResource(R.string.tool_blender_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Extension, stringResource(R.string.tool_blender_detail), "pigeonhub run --name \"Blender render\" -- blender -b project.blend -a"),
     )
     specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, if (tool.id == "comfyui") "comfyui" else "cli"), now) { onSelect(tool) } }
 }
@@ -342,6 +371,48 @@ private fun ToolDetailScreen(tool: ToolSpec, showSnackbar: (String) -> Unit, onB
 @Composable
 private fun TextButtonLike(text: String, onClick: () -> Unit) {
     androidx.compose.material3.TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text("‹  $text") }
+}
+
+@Composable
+private fun PcConnectionCard(enabled: Boolean, onConnect: () -> Unit) {
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CardHeader(
+                icon = { Icon(Icons.Outlined.Code, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp)) },
+                title = stringResource(R.string.cli_connection_title),
+                tagline = stringResource(R.string.cli_connection_tagline),
+            )
+            Text(stringResource(R.string.cli_connection_body), style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = onConnect, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.cli_connection_action))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PcPairingApprovalDialog(
+    request: PcLoginRequest,
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onApprove: () -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.pairing_scan_title)) },
+        text = { Text(stringResource(R.string.pairing_scan_body)) },
+        confirmButton = {
+            Button(onClick = onApprove, enabled = !busy) {
+                if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else Text(stringResource(R.string.pairing_scan_approve))
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss, enabled = !busy) {
+                Text(stringResource(R.string.pairing_scan_cancel))
+            }
+        },
+    )
 }
 
 @Composable

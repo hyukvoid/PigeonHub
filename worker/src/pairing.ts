@@ -33,7 +33,27 @@ export interface PairingRow {
   revoked: number;
 }
 
+export interface LoginRequestIssue {
+  request_id: string;
+  challenge: string;
+  poll_secret: string;
+  expires_at: string;
+}
+
+interface LoginRequestRow {
+  request_id: string;
+  challenge_hash: string;
+  poll_secret_hash: string;
+  created_at: string;
+  expires_at: string;
+  approved_at: string | null;
+  consumed_at: string | null;
+  installation_id: string | null;
+  channel_id: string | null;
+}
+
 export const PAIRING_TTL_MS = 10 * 60 * 1000;
+export const LOGIN_REQUEST_TTL_MS = 10 * 60 * 1000;
 
 /** Human-typeable code: PHC-XXXXX-XXXXX-XXXXX (Crockford-ish alphabet). */
 export function generatePairingCode(): string {
@@ -47,6 +67,116 @@ export function generatePairingCode(): string {
 export function generateConnectorToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return "pct_" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function randomHex(bytesLength: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(bytesLength));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * MVP-016 PC-first login. The QR contains only request_id + challenge. The
+ * poll secret stays in the PC process, so scanning a visible QR cannot fetch
+ * the connector credential by itself.
+ */
+export async function createLoginRequest(env: Env): Promise<LoginRequestIssue> {
+  const now = new Date();
+  const requestId = `plr_${randomHex(16)}`;
+  const challenge = `phc_${randomHex(16)}`;
+  const pollSecret = `phs_${randomHex(32)}`;
+  const expiresAt = new Date(now.getTime() + LOGIN_REQUEST_TTL_MS).toISOString();
+  await env.DB.prepare(
+    `INSERT INTO pairing_requests
+      (request_id, challenge_hash, poll_secret_hash, created_at, expires_at)
+     VALUES (?1, ?2, ?3, ?4, ?5)`,
+  )
+    .bind(requestId, await sha256Hex(challenge), await sha256Hex(pollSecret), now.toISOString(), expiresAt)
+    .run();
+  return { request_id: requestId, challenge, poll_secret: pollSecret, expires_at: expiresAt };
+}
+
+export async function approveLoginRequest(
+  env: Env,
+  requestId: string,
+  challenge: string,
+  installationId: string,
+  channelId: string,
+): Promise<{ error: string } | { status: "approved" }> {
+  const row = await env.DB.prepare(
+    `SELECT request_id, challenge_hash, poll_secret_hash, created_at, expires_at,
+            approved_at, consumed_at, installation_id, channel_id
+     FROM pairing_requests WHERE request_id = ?1`,
+  )
+    .bind(requestId)
+    .first<LoginRequestRow>();
+  if (!row) return { error: "invalid login request" };
+  if (new Date(row.expires_at).getTime() < Date.now()) return { error: "login request expired" };
+  if ((await sha256Hex(challenge)) !== row.challenge_hash) return { error: "login challenge mismatch" };
+  if (row.consumed_at !== null) return { error: "login request already completed" };
+  if (row.approved_at !== null) return { status: "approved" };
+  const updated = await env.DB.prepare(
+    `UPDATE pairing_requests
+     SET approved_at = ?2, installation_id = ?3, channel_id = ?4
+     WHERE request_id = ?1 AND approved_at IS NULL AND consumed_at IS NULL`,
+  )
+    .bind(requestId, new Date().toISOString(), installationId, channelId)
+    .run();
+  if ((updated.meta.changes ?? 0) === 0) return { error: "login request was changed" };
+  return { status: "approved" };
+}
+
+export async function pollLoginRequest(
+  env: Env,
+  origin: string,
+  requestId: string,
+  pollSecret: string,
+): Promise<
+  | { status: "pending" }
+  | (PairingRedeemResult & { status: "approved" })
+  | { error: string }
+> {
+  const row = await env.DB.prepare(
+    `SELECT request_id, challenge_hash, poll_secret_hash, created_at, expires_at,
+            approved_at, consumed_at, installation_id, channel_id
+     FROM pairing_requests WHERE request_id = ?1`,
+  )
+    .bind(requestId)
+    .first<LoginRequestRow>();
+  if (!row || (await sha256Hex(pollSecret)) !== row.poll_secret_hash) return { error: "invalid login request" };
+  if (new Date(row.expires_at).getTime() < Date.now()) return { error: "login request expired" };
+  if (row.consumed_at !== null) return { error: "login request already completed" };
+  if (row.approved_at === null || row.installation_id === null || row.channel_id === null) return { status: "pending" };
+
+  const consumedAt = new Date().toISOString();
+  const consumed = await env.DB.prepare(
+    `UPDATE pairing_requests SET consumed_at = ?2
+     WHERE request_id = ?1 AND consumed_at IS NULL`,
+  )
+    .bind(requestId, consumedAt)
+    .run();
+  if ((consumed.meta.changes ?? 0) === 0) return { error: "login request already completed" };
+
+  const token = generateConnectorToken();
+  const tokenHash = await sha256Hex(token);
+  const versionRow = await env.DB.prepare(
+    `SELECT COALESCE(MAX(version), 0) + 1 AS v FROM connector_tokens WHERE channel_id = ?1`,
+  )
+    .bind(row.channel_id)
+    .first<{ v: number }>();
+  const version = versionRow?.v ?? 1;
+  await env.DB.prepare(
+    `INSERT INTO connector_tokens (channel_id, token_hash, version, created_at)
+     VALUES (?1, ?2, ?3, ?4)`,
+  )
+    .bind(row.channel_id, tokenHash, version, consumedAt)
+    .run();
+  return {
+    status: "approved",
+    channel_id: row.channel_id,
+    endpoint: `${origin}/v1/channels/${row.channel_id}/messages`,
+    write_token: token,
+    token_version: version,
+  };
 }
 
 export async function issuePairingCode(
