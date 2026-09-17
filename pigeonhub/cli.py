@@ -26,7 +26,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="pigeonhub",
         description="Track a declared long-running command in the PigeonHub Job Inbox.",
     )
-    sub = parser.add_subparsers(dest="subcommand", required=True)
+    parser.add_argument("--version", action="store_true", help="print the PigeonHub CLI version and exit")
+    sub = parser.add_subparsers(dest="subcommand")
+
+    version_parser = sub.add_parser("version", help="print the PigeonHub CLI version")
 
     login_parser = sub.add_parser("login", help="connect this PC with a one-time Android code")
     login_parser.add_argument("--code", help="one-time pairing code")
@@ -79,9 +82,46 @@ def _command_after_separator(values: list[str]) -> list[str]:
     return values[1:] if values and values[0] == "--" else values
 
 
+def _print_first_run() -> None:
+    """Friendly no-subcommand banner; raw help stays available via --help."""
+    from .core import credentials_path
+
+    print("PigeonHub")
+    print("Long-running jobs, in your pocket.")
+    print()
+    if not credentials_path().exists():
+        print("You're not connected yet.")
+        print()
+        print("Start with:")
+        print("  pigeonhub login")
+        print()
+        print("Then run:")
+        print("  pigeonhub run -- <your command>")
+        return
+    print("You're connected. Send a long-running job to your phone with:")
+    print("  pigeonhub run --name \"My job\" -- <your command>")
+    print()
+    print("Handy commands:")
+    print("  pigeonhub status      show connection state")
+    print("  pigeonhub --help      all commands")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "version", False):
+        from . import __version__
+
+        print(f"PigeonHub CLI {__version__}")
+        return 0
+    if args.subcommand == "version":
+        from . import __version__
+
+        print(f"PigeonHub CLI {__version__}")
+        return 0
+    if args.subcommand is None:
+        _print_first_run()
+        return 0
     try:
         if args.subcommand in ("login", "pair"):
             login(code=args.code, qr_image=args.qr_image, worker_url=args.worker_url, legacy=args.subcommand == "pair")

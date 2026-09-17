@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -9,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from pigeonhub import core
+from pigeonhub import __version__, core, cli
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -108,6 +110,34 @@ class CliCoreTests(unittest.TestCase):
 
     def _events(self):
         return [body.get("job", {}) for path, body in _Handler.requests if path.endswith("/messages") and body.get("job")]
+
+    def test_version_flag_and_command_match_single_source(self):
+        for argv in (["--version"], ["version"]):
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                self.assertEqual(cli.main(argv), 0)
+            self.assertEqual(buffer.getvalue().strip(), f"PigeonHub CLI {__version__}")
+
+    def test_bare_command_prints_first_run_guidance_not_argparse_help(self):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            self.assertEqual(cli.main([]), 0)
+        out = buffer.getvalue()
+        self.assertIn("PigeonHub", out)
+        self.assertIn("pigeonhub run", out)
+        self.assertNotIn("usage:", out)
+        logged_out = patch.dict(os.environ, {"PIGEONHUB_CREDENTIALS": str(Path(self.temp.name) / "absent.json")})
+        logged_out.start()
+        try:
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                self.assertEqual(cli.main([]), 0)
+            out = buffer.getvalue()
+            self.assertIn("You're not connected yet.", out)
+            self.assertIn("pigeonhub login", out)
+            self.assertNotIn("usage:", out)
+        finally:
+            logged_out.stop()
 
     def test_run_injects_job_id_and_preserves_child_exit(self):
         child_marker = Path(self.temp.name) / "child.txt"
