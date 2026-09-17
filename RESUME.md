@@ -1,3 +1,87 @@
+# RESUME — MVP-017.5 + MVP-018 overnight campaign (2026-09-18)
+
+Branch: `autonomous/mvp0175-mvp018-zcode-overnight-20260918` (from `36e2cd5`).
+Previous RC state (MVP-017) is at `36e2cd5`; this branch adds production
+validation + the Windows distribution.
+
+## Verdicts
+
+- **MVP-017.5: VERIFIED (with named deferrals).** schema_013 applied to
+  production D1; worker redeployed (`72805dc3`); Codex real-session E2E
+  (RUNNING+DONE→Android, `fcm_accepted`); ZCode hook-chain E2E (5-state
+  lifecycle→card+shade, vendor payload simulated — standalone CLI login is an
+  owner action); Claude setup gates verified, real session blocked by 402
+  quota (owner); Grok not installed (owner). Two real bugs found+fixed:
+  ZCode strict-schema hook field, Windows `.cmd` shim launches.
+- **MVP-018: CONDITIONAL_WINDOWS_BETA_READY.** `0.18.0-beta.1`: PyInstaller
+  onefile + Inno Setup per-user installer, PATH-safe, credential-preserving,
+  Defender-clean, checksums published. Full QA matrix in
+  `docs/reports/mvp0175-mvp018-overnight/INSTALLER-QA.md`.
+
+## Current environment state (what a follow-up session walks into)
+
+- Windows: pigeonhub CLI **installed** at
+  `%LOCALAPPDATA%\Programs\PigeonHub` (0.18.0-beta.1 with the `.cmd` fix), on
+  the user PATH; credentials bound to the **live device channel**
+  `ch_d7c527c2…` via a **test-minted** connector token (revocation command in
+  SECURITY.md; original dead-channel credential backup in
+  `%TEMP%\credentials-backup.json`).
+- Agent hooks **installed**: zcode (user config, strict-schema-conformant),
+  codex (`~/.codex/hooks.json`, needs one-time `/hooks` trust),
+  claude (`~/.claude/settings.json`, fires once quota returns). Backups:
+  `*.pigeonhub.bak.*` next to each file; `pigeonhub setup <agent> --remove`
+  reverses cleanly.
+- Emulator `Medium_Phone_API_36.1` running the **current release APK**
+  (installed with `adb install -r`, channel intact); Inbox shows the Codex ×2
+  + Zcode evidence cards.
+- Inno Setup 6.7.3 installed (user scope, winget); PyInstaller build venv at
+  `%TEMP%\ph-build-venv`.
+- `dist/` + `packaging/windows/{dist,installer}/` artifacts are gitignored;
+  rebuild with `powershell -File packaging/windows/build.ps1`.
+
+## Verified gates this campaign
+
+Python 14/14 · worker typecheck · Android unit+assembleDebug+assembleRelease ·
+`git diff --check` · scoped secret scan clean · Defender scan clean ·
+SHA256SUMS verified.
+
+## Owner actions (exact, ≤5)
+
+1. Physical Galaxy camera QR E2E → proper PC re-pairing → revoke the
+   test-minted token (command in SECURITY.md).
+2. Claude quota → run one `claude -p` task (hooks already installed).
+3. `zcode login` (browser OAuth) OR just restart the ZCode desktop app — then
+   real ZCode sessions flow through the verified hooks.
+4. Codex TUI `/hooks` → trust the PigeonHub handlers (one-time).
+5. Code-signing certificate (optional before wide beta; SmartScreen otherwise).
+
+## Next product steps (highest value first)
+
+1. **Worker: fix stored-but-502 duplicate behavior** (FINAL-REPORT §Findings
+   #4) — return a distinct "stored, push failed" status so client retries
+   don't duplicate rows.
+2. **CLI: stale-credential UX** — when FCM says NotRegistered for the paired
+   channel, tell the user to `pigeonhub login` again instead of raw failures.
+3. **Worker: stale RUNNING job sweeper** (carried from MVP-011.5 RESUME) —
+   hard-killed jobs stay RUNNING forever tonight.
+4. Winget manifest when the certificate lands (pre-repo PR can be prepared
+   without publishing).
+
+## Watch-outs
+
+- ZCode reads hook config at process start — after any `pigeonhub setup
+  zcode`, only NEW ZCode sessions fire hooks.
+- Codex hooks silently no-op until trusted via `/hooks`; only
+  `--dangerously-bypass-hook-trust` runs them per-invocation.
+- Free-tier quota: `QUOTA_MINUTE_LIMIT=5` 429s under rapid jobs; terminal
+  publishes retry (8×), RUNNING does not (by design).
+- uiautomator dump paths in Git Bash need `//sdcard/ui.xml` (MSYS mangling);
+  release-build nav has no Diagnostics tab; emulator clock skew ~40–60 s.
+
+---
+
+# Previous session resume (MVP-011.5→015, kept for history)
+
 # RESUME — MVP-017 AI Agent Integrations v1 (2026-09-17)
 
 Branch: `autonomous/mvp017-agent-integrations-codex-20260917`.
@@ -17,111 +101,35 @@ RC-001A Artemis UX was checkpointed at `eb2e65c` before this branch began.
   failure, injects `PIGEONHUB_JOB_ID`, preserves child stdout/stderr/exit code,
   and reports terminal publish failures without masking that exit code.
 - Worker PC-first pairing routes are typechecked; apply `worker/schema_013.sql`
-  before using the flow against a deployed Worker.
-- `pigeonhub/agents.py` now normalizes Codex, Claude Code, Grok Build, and
+  before using the flow against a deployed Worker. *(Superseded: applied +
+  deployed in the MVP-017.5 campaign.)*
+- `pigeonhub/agents.py` normalizes Codex, Claude Code, Grok Build, and
   ZCode lifecycle hooks into the existing Job Model with an allowlist privacy
-  boundary; `PostToolUseFailure` is recoverable progress and only real waits
-  become `NEEDS_ACTION`.
+  boundary. *(Superseded detail: the zcode handler had a strict-schema bug,
+  fixed in MVP-017.5.)*
 - `pigeonhub setup <agent>` provides preview, explicit confirmation, backup,
   atomic apply, verification, idempotency, and safe removal for vendor-native
-  user hook/config files. No user config was changed while implementing this
-  branch.
+  user hook/config files.
 - Android's primary AI grid is exactly OpenAI Codex, Claude Code, Grok Build,
   and ZCode · GLM; Custom Agent remains Advanced only.
 
-## Verified in this session
+## Verified in that session
 
-- Python CLI/adapter tests: 10/10, including setup idempotency/removal and
-  lifecycle/privacy normalization.
-- Worker `npm run typecheck`: pass.
-- Android debug assemble + unit tests: pass.
-- Android release assemble: pass.
-- `git diff --check`: pass; only CRLF normalization warnings remain.
-- Codex `0.152.1` and Claude Code `2.1.88` detected. Grok is not installed;
-  ZCode has a generic user config but no executable/enabled hook events, so
-  their real-agent E2E is `DEFERRED_OWNER_ACTION`.
+- Python CLI/adapter tests 10/10; worker typecheck; Android debug assemble +
+  unit tests; release assemble; `git diff --check`.
+- Codex `0.152.1` and Claude Code `2.1.88` detected. Grok not installed;
+  ZCode had no enabled hook events → real-agent E2E deferred (largely closed
+  in MVP-017.5; see that report).
 
-## Next operational step
-
-Apply/deploy `worker/schema_013.sql` to the intended Worker/D1 environment, then
-run a physical Android camera scan against `pigeonhub login`. Restore Claude
-quota and install/authenticate Grok/ZCode before claiming those real-agent E2E
-gates. MVP-018 remains responsible for a signed Windows single executable,
-installer, and PATH setup.
-
----
-
-# RESUME — next session picks up here (2026-09-15, end of MVP-011.5→015 campaign)
+# RESUME — MVP-011.5→015 campaign (2026-09-15, kept for history)
 
 Branch: `autonomous/mvp0115-mvp015-predeploy-overnight-20260914` (from `b88b335`).
-`main` untouched. Working tree: clean after the final docs commit.
-Latest commit: see `git log --oneline -8`.
 
-## State (source of truth)
-
-- **MVP-011.5, 012, 013, 014 (Codex), 015 — all VERIFIED.** Scoreboard + evidence:
-  `docs/reports/mvp0115-mvp015-predeploy/` (FINAL-REPORT, PROGRESS, FINDINGS,
-  ARCHITECTURE, E2E-EVIDENCE, PREDEPLOY-CHECKLIST).
-- **Deployed worker** `pigeonhub-push`: version `5e11002f` (chain: 957d83ca →
-  111909b5 → 06046c1d → 5e11002f). D1 migrations applied this campaign:
-  `schema_011.sql` (deleted_messages tombstones), `schema_012.sql`
-  (connector_health) — both additive. Config changes to revisit:
-  `QUOTA_DAILY_LIMIT` 50→300, `BETA_MAX_INSTALLATIONS` 20→40.
-- **Android**: release APK (`app/build/outputs/apk/release/app-release.apk`)
-  installed on emulator-5554 (AVD `Medium_Phone_API_36.1`), onboarded fresh as
-  installation channel `ch_b00fc82923b64b3399c4` (invite TEST_INVITE_CODE_18).
-  Room version 5 (unchanged).
-- **Pairing**: `~/.pigeonhub/credentials.json` holds a live connector token for
-  the phone's channel. `~/.claude`/`~/.codex` configs untouched (Codex notify
-  tested per-invocation via `-c`, Claude untouched).
-- **ComfyUI**: real install at `tools/comfyui` (gitignored) + venv
-  `tools/comfyui-venv` (system-site-packages, CPU torch reuse). Boot:
-  `cd tools && ./comfyui-venv/Scripts/python.exe comfyui/main.py --cpu --listen
-  127.0.0.1 --port 8188`. Connectors: `connectors/comfyui_connector.py`
-  (submit/watch), `connectors/agent_bridge_codex.py` (real Codex sessions),
-  `connectors/pigeonhub_connector.py pair --qr-image|--code`.
-
-## Completed this campaign
-
-- MVP-011.5: tombstone deletion (worker+client), live relative time, delete-all,
-  plurals, elapsed clock-skew clamp, connector `args.cmd` fix. delete_test 9/9.
-- MVP-012: real ComfyUI 0.35.0 E2E (submit + watch, DONE & FAILED on phone).
-- MVP-013: QR pairing (zxing render; pair by decoding a phone screenshot;
-  replay/expiry/revoke/repair proven).
-- MVP-014: real Codex sessions as Job Cards (DONE + FAILED, HIGH pushes).
-- MVP-015: connection health (worker-observed, /me/health, HealthLine UI,
-  DEGRADED + self-heal) + predeploy hardening (fresh install release gate,
-  offline recovery, process death, spam, font/theme walks, secret scan).
-
-## Exact blockers / owner actions (also in FINAL-REPORT §4)
-
-1. Claude Code real-session E2E — API 402 quota; rerun with connectors/agent_hook.py.
-2. BETA_MAX_INSTALLATIONS + stale-install cleanup story (cap now 40 for tests).
-3. QUOTA_DAILY_LIMIT back to production value (now 300).
-4. Physical-device pass: real Galaxy + camera QR scan (emulator can't).
-5. Play signing/listing (out of scope by campaign rules).
-
-## Exact next action for the next session
-
-1. `git log --oneline -5` + read FINAL-REPORT.md (2 min) — everything else is here.
-2. If owner granted Claude quota: wire hooks per connectors/agent_hook.py in a
-   scratch project dir and run a real `claude -p` session; verify the Agent card
-   lifecycle (same gates as MVP-014 Codex).
-3. If continuing product work: server-side job timeout (mark stale RUNNING
-   cards, FINDINGS #11) and WorkManager periodic sync (FINDINGS #5) are the two
-   highest-value reliability extensions; both are small and don't touch the
-   verified FCM pipeline.
-4. Provision fresh test invites via `INVITE_TEST_HASHES` (pattern in
-   `worker/scripts/*.mjs` + RESUME history); codes are single-use and burned
-   through CODE_18.
-
-## Watch-outs
-
-- AVD `PigeonHub-E2E-API36` is wedged (boots "offline") — use
-  `Medium_Phone_API_36.1` (cold-boots ~45s).
-- Release build: bottom nav has 3 items (no Diagnostics in release) — nav
-  centers ≈ x 172 / 540 / 907; don't reuse debug-build tap coordinates.
-- Release build logs are quiet — verify via UI/dumpsys, not logcat.
-- Emulator clock ran ~40-60s behind the server — elapsed/relative code already
-  clamps, but keep it in mind when comparing timestamps.
-- uiautomator taps: one tap per adb command; re-dump before each tap.
+- **MVP-011.5, 012, 013, 014 (Codex), 015 — all VERIFIED.**
+- Deployed worker then: `5e11002f`; D1 migrations schema_011/012 applied.
+- Android release APK on emulator-5554 (`Medium_Phone_API_36.1`), channel
+  `ch_b00fc82923b64b3399c4` (later recreated as `ch_d7c527c2…`).
+- ComfyUI real install at `tools/comfyui` (gitignored) + venv.
+- Watch-outs that still hold: AVD `PigeonHub-E2E-API36` wedged — use
+  `Medium_Phone_API_36.1`; release builds log quietly (verify via UI/dumpsys);
+  emulator clock ~40–60 s behind; one tap per adb command, re-dump before taps.
