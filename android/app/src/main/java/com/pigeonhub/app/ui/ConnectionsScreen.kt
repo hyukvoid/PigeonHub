@@ -265,14 +265,12 @@ private fun AiAgentCards(
     onSelect: (ToolSpec) -> Unit,
 ) {
     val specs = listOf(
-        ToolSpec("claude", "Claude", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "pigeonhub run --name \"Claude task\" -- <your command>"),
-        ToolSpec("codex", "Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "pigeonhub run --name \"Codex task\" -- <your command>"),
-        ToolSpec("zai", "z.ai", stringResource(R.string.tool_zai_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.Star, stringResource(R.string.tool_zai_detail)),
-        ToolSpec("chatgpt", "ChatGPT", stringResource(R.string.tool_chatgpt_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.Chat, stringResource(R.string.tool_chatgpt_detail)),
-        ToolSpec("antigravity", "Antigravity", stringResource(R.string.tool_antigravity_description), stringResource(R.string.tool_status_coming_soon), stringResource(R.string.tool_action_howto), Icons.Outlined.RocketLaunch, stringResource(R.string.tool_antigravity_detail)),
-        ToolSpec("custom-agent", stringResource(R.string.tool_custom_agent_title), stringResource(R.string.tool_custom_agent_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.SmartToy, stringResource(R.string.tool_custom_agent_detail), "pigeonhub run --name \"Custom agent task\" -- <your command>"),
+        ToolSpec("codex", "OpenAI Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "pigeonhub setup codex"),
+        ToolSpec("claude", "Claude Code", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "pigeonhub setup claude"),
+        ToolSpec("grok", "Grok Build", stringResource(R.string.tool_grok_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_grok_detail), "pigeonhub setup grok"),
+        ToolSpec("zcode", "ZCode · GLM", stringResource(R.string.tool_zcode_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.SmartToy, stringResource(R.string.tool_zcode_detail), "pigeonhub setup zcode"),
     )
-    specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, "agent", "cli"), now) { onSelect(tool) } }
+    specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, "agent", "cli", "codex", "claude", "grok", "zcode"), now) { onSelect(tool) } }
 }
 
 @Composable
@@ -313,7 +311,7 @@ private fun ToolCard(tool: ToolSpec, health: HealthApi.ConnectorHealth?, now: Lo
                 title = tool.title,
                 tagline = tool.description,
             )
-            if (tool.id == "comfyui") HealthLine(health, now)
+            if (tool.id == "comfyui" || tool.id in setOf("codex", "claude", "grok", "zcode")) HealthLine(health, now)
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatusPill(tool.status, tool.status == stringResource(R.string.tool_status_connected))
                 Spacer(Modifier.weight(1f))
@@ -361,7 +359,10 @@ private fun ToolDetailScreen(tool: ToolSpec, showSnackbar: (String) -> Unit, onB
             }
         } else if (tool.command != null) {
             Text(stringResource(R.string.tool_usage_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.tool_usage_steps), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                stringResource(if (tool.id in setOf("codex", "claude", "grok", "zcode")) R.string.tool_agent_usage_steps else R.string.tool_usage_steps),
+                style = MaterialTheme.typography.bodyMedium,
+            )
             SelectionContainer { Text(tool.command, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
             FilledTonalButton(onClick = { clipboard.setText(AnnotatedString(tool.command)); showSnackbar(copiedMessage) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.tool_copy_command)) }
         }

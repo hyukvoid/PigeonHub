@@ -1,6 +1,6 @@
-# RESUME — MVP-016 CLI Core (2026-09-17)
+# RESUME — MVP-017 AI Agent Integrations v1 (2026-09-17)
 
-Branch: `autonomous/mvp016-cli-core-codex-20260917`.
+Branch: `autonomous/mvp017-agent-integrations-codex-20260917`.
 RC-001A Artemis UX was checkpointed at `eb2e65c` before this branch began.
 
 ## Current state
@@ -18,20 +18,36 @@ RC-001A Artemis UX was checkpointed at `eb2e65c` before this branch began.
   and reports terminal publish failures without masking that exit code.
 - Worker PC-first pairing routes are typechecked; apply `worker/schema_013.sql`
   before using the flow against a deployed Worker.
+- `pigeonhub/agents.py` now normalizes Codex, Claude Code, Grok Build, and
+  ZCode lifecycle hooks into the existing Job Model with an allowlist privacy
+  boundary; `PostToolUseFailure` is recoverable progress and only real waits
+  become `NEEDS_ACTION`.
+- `pigeonhub setup <agent>` provides preview, explicit confirmation, backup,
+  atomic apply, verification, idempotency, and safe removal for vendor-native
+  user hook/config files. No user config was changed while implementing this
+  branch.
+- Android's primary AI grid is exactly OpenAI Codex, Claude Code, Grok Build,
+  and ZCode · GLM; Custom Agent remains Advanced only.
 
 ## Verified in this session
 
-- Python CLI tests: 5/5, including PC-first login polling and process lifecycle.
+- Python CLI/adapter tests: 10/10, including setup idempotency/removal and
+  lifecycle/privacy normalization.
 - Worker `npm run typecheck`: pass.
 - Android debug assemble + unit tests: pass.
 - Android release assemble: pass.
 - `git diff --check`: pass; only CRLF normalization warnings remain.
+- Codex `0.152.1` and Claude Code `2.1.88` detected. Grok is not installed;
+  ZCode has a generic user config but no executable/enabled hook events, so
+  their real-agent E2E is `DEFERRED_OWNER_ACTION`.
 
 ## Next operational step
 
 Apply/deploy `worker/schema_013.sql` to the intended Worker/D1 environment, then
-run a physical Android camera scan against `pigeonhub login`. MVP-018 remains
-responsible for a signed Windows single executable, installer, and PATH setup.
+run a physical Android camera scan against `pigeonhub login`. Restore Claude
+quota and install/authenticate Grok/ZCode before claiming those real-agent E2E
+gates. MVP-018 remains responsible for a signed Windows single executable,
+installer, and PATH setup.
 
 ---
 

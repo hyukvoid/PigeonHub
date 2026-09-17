@@ -18,6 +18,7 @@ from .core import (
     run_job,
     status,
 )
+from .agents import AGENTS, build_setup_plan, apply_setup, handle_agent_event, remove_setup, setup_summary
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,6 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--name", help="human-readable job name")
     run_parser.add_argument("command", nargs=argparse.REMAINDER, help="command to execute; use -- before command flags")
 
+    setup_parser = sub.add_parser("setup", help="install or remove one PigeonHub agent integration")
+    setup_parser.add_argument("agent", choices=AGENTS)
+    setup_parser.add_argument("--remove", action="store_true", help="remove only PigeonHub-managed hooks")
+    setup_parser.add_argument("--yes", action="store_true", help="confirm the printed change preview")
+    setup_parser.add_argument("--json", action="store_true", help="print a machine-readable preview/result")
+
+    event_parser = sub.add_parser("agent-event", help=argparse.SUPPRESS)
+    event_parser.add_argument("agent", choices=AGENTS)
+    event_parser.add_argument("--job-name")
+
     sub.add_parser("comfyui-demo", help=argparse.SUPPRESS)
     return parser
 
@@ -95,6 +106,48 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if result.ok else 1
         if args.subcommand == "run":
             return run_job(_command_after_separator(args.command), name=args.name)
+        if args.subcommand == "agent-event":
+            return handle_agent_event(args.agent, job_name=args.job_name)
+        if args.subcommand == "setup":
+            plan = build_setup_plan(args.agent, remove=args.remove)
+            summary = setup_summary(plan)
+            if not args.json:
+                print(f"PigeonHub {args.agent} integration")
+                print(f"Detected: {'yes' if plan.detection.detected else 'no'}" + (f" ({plan.detection.version})" if plan.detection.version else ""))
+                print(f"Target: {plan.target}")
+                for line in plan.change_lines:
+                    print(f"- {line}")
+            if plan.blocked_reason:
+                if args.json:
+                    print(json.dumps(summary, indent=2, ensure_ascii=False))
+                else:
+                    print(plan.blocked_reason, file=sys.stderr)
+                return 2
+            if not plan.changed:
+                if args.json:
+                    print(json.dumps(summary, indent=2, ensure_ascii=False))
+                else:
+                    print("Nothing to change; setup is already in the requested state.")
+                return 0
+            if args.json and not args.yes:
+                print(json.dumps(summary, indent=2, ensure_ascii=False))
+                return 0
+            if not args.yes:
+                try:
+                    answer = input("Apply these changes? [Y/n] ").strip().lower()
+                except EOFError:
+                    answer = "n"
+                if answer not in {"", "y", "yes"}:
+                    print("Cancelled; no files changed.")
+                    return 0
+            backup = remove_setup(plan) if args.remove else apply_setup(plan)
+            if args.json:
+                summary["applied"] = True
+                summary["backup"] = str(backup) if backup else None
+                print(json.dumps(summary, indent=2, ensure_ascii=False))
+            else:
+                print(f"Applied. Backup: {backup}" if backup else "Applied. No backup was needed for a new file.")
+            return 0
         if args.subcommand == "comfyui-demo":
             return comfyui_demo()
     except CliError as exc:

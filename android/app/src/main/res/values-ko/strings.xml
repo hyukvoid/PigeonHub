@@ -159,14 +159,19 @@
     <string name="tool_status_connected">연결됨</string>
     <string name="tool_status_setup_available">설정 가능</string>
     <string name="tool_status_cli_supported">CLI 지원</string>
+    <string name="tool_status_supported">지원됨</string>
     <string name="tool_status_coming_soon">준비 중</string>
     <string name="tool_action_connect">연결하기</string>
     <string name="tool_action_manage">관리</string>
     <string name="tool_action_howto">사용 방법</string>
+    <string name="tool_action_setup">설정 방법</string>
     <string name="tool_usage_title">사용 방법</string>
     <string name="tool_usage_steps">1. PC에서 pigeonhub login을 한 번 실행하고 PigeonHub 앱에서 연결합니다.
 2. 실행할 명령을 pigeonhub run 뒤에 넣습니다.
 3. 작업을 실행하면 진행·완료·실패를 알려드려요.</string>
+    <string name="tool_agent_usage_steps">1. PC에서 pigeonhub setup &lt;agent&gt;를 한 번 실행하고 변경 미리보기를 확인하세요.
+2. 평소처럼 에이전트를 사용하세요.
+3. PigeonHub가 라이프사이클을 알려드리며 프롬프트와 소스 파일은 전송하지 않아요.</string>
     <string name="tool_copy_command">예시 복사</string>
     <string name="comfyui_setup_steps">PC에서 pigeonhub login을 실행한 뒤 PigeonHub가 보여주는 1회용 코드를 입력하거나 스캔하세요. PC에서 확인을 마쳐야 연결이 완료돼요.</string>
     <string name="pairing_scan_title">이 PC를 연결할까요?</string>
@@ -179,6 +184,10 @@
     <string name="tool_claude_detail">Claude는 공통 명령줄 작업 래퍼로 사용할 수 있어요. 별도의 Claude 연결을 만들지는 않아요.</string>
     <string name="tool_codex_description">Codex 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>
     <string name="tool_codex_detail">Codex는 공통 명령줄 작업 래퍼로 사용할 수 있어요. 별도의 Codex 연결을 만들지는 않아요.</string>
+    <string name="tool_grok_description">Grok Build 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>
+    <string name="tool_grok_detail">Grok Build의 공식 사용자 훅 디렉터리를 사용해요. 라이프사이클만 연결하고 프롬프트·소스·도구 입력은 전송하지 않아요.</string>
+    <string name="tool_zcode_description">ZCode 코딩 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>
+    <string name="tool_zcode_detail">ZCode · GLM의 지원되는 사용자 수준 훅 설정을 사용해요. 프로젝트 수준 훅은 실행되지 않으므로 사용하지 않아요.</string>
     <string name="tool_zai_description">z.ai 작업을 작업 수신함에서 확인하세요.</string>
     <string name="tool_zai_detail">z.ai 자동 연결은 준비 중이에요. 로컬에서 명령을 실행할 수 있다면 공통 명령줄 경로를 사용할 수 있어요.</string>
     <string name="tool_chatgpt_description">ChatGPT 작업을 작업 수신함에서 확인하세요.</string>

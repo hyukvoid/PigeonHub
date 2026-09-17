@@ -149,6 +149,7 @@ def _payload(
     result: str | None = None,
     started_at: str | None = None,
     finished_at: str | None = None,
+    deep_link: str | None = None,
     title: str | None = None,
     message: str | None = None,
     priority: str = "normal",
@@ -168,6 +169,8 @@ def _payload(
         job["started_at"] = started_at
     if finished_at:
         job["finished_at"] = finished_at
+    if deep_link:
+        job["deep_link"] = deep_link
     return {
         "title": (title or f"{job_name or job_id}: {state.lower()}")[:500],
         "message": str(message if message is not None else state)[:4000],
