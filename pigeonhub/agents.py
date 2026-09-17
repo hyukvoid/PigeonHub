@@ -380,7 +380,8 @@ def _hook_events(agent: str) -> tuple[str, ...]:
 
 def _hook_handler(agent: str) -> dict[str, Any]:
     if agent == "zcode":
-        return {"type": "process", "command": "pigeonhub", "args": ["agent-event", agent], "enabled": True, "timeoutMs": 10000}
+        # ZCode's process-hook schema is strict: only type/command/args/timeoutMs.
+        return {"type": "process", "command": "pigeonhub", "args": ["agent-event", agent], "timeoutMs": 10000}
     return {"type": "command", "command": f"{_MANAGED_COMMAND} {agent}", "timeout": 10, "statusMessage": "Reporting lifecycle to PigeonHub"}
 
 

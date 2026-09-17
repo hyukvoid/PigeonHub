@@ -85,6 +85,26 @@ class AgentSetupTests(unittest.TestCase):
                 self.assertFalse(restored["hooks"]["enabled"])
                 self.assertEqual(agents._managed_count(restored, "zcode"), 0)
 
+    def test_zcode_handler_matches_strict_process_hook_schema(self):
+        # ZCode validates hook entries with a strict schema that allows only
+        # type/command/args/timeoutMs on a process hook; an extra key such as
+        # "enabled" makes the runner drop the hook silently.
+        allowed = {"type", "command", "args", "timeoutMs"}
+        handler = agents._hook_handler("zcode")
+        self.assertEqual(set(handler), allowed)
+        self.assertEqual(handler["type"], "process")
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            target = home / ".zcode" / "cli" / "config.json"
+            target.parent.mkdir(parents=True)
+            with patch.object(agents.shutil, "which", side_effect=self._which):
+                agents.apply_setup(agents.build_setup_plan("zcode", home=home))
+                value = json.loads(target.read_text(encoding="utf-8"))
+                for groups in value["hooks"]["events"].values():
+                    for group in groups:
+                        for hook in group["hooks"]:
+                            self.assertTrue(set(hook) <= allowed, hook)
+
 
 if __name__ == "__main__":
     unittest.main()
