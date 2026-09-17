@@ -103,10 +103,32 @@ named, not papered over.
 
 | Gate | Status | Evidence |
 |---|---|---|
-| (filled below after setup preview / task attempt) | | |
+| SETUP_PREVIEW | V | Preview named `~/.claude/settings.json`, 6 events; claude 2.1.88 detected |
+| CONFIRM | V | `--yes` gate enforced |
+| APPLY | V | Backup `settings.json.pigeonhub.bak.20260917164742Z`; `env/model/permissions/theme` keys preserved |
+| IDEMPOTENT_REAPPLY | V | "Nothing to change" |
+| REMOVE | V | 6 managed hooks removed; `hooks` left `{}`; all user keys intact |
+| REINSTALL | V | 6 events restored, user keys intact |
+| REAL_START / REAL_DONE | D | **`claude -p` → API Error: 402 "insufficient_quota — You have exceeded your credit quota for this month"** — no session starts, so no lifecycle can be produced |
+| REAL_FAILED / REAL_NEEDS_ACTION | D | Same quota blocker |
+| ANDROID_CARD / SYSTEM_PUSH | I | Same adapter machinery as the real-verified Codex path (shared normalizer + worker pipeline); waiting on quota |
+| HEALTH | I | Rides MVP-015 per-source health (source=claude) |
+
+**Owner action (1 step):** top up Claude credit/quota, then run any
+`claude -p "…"` task — hooks are already installed in `~/.claude/settings.json`
+and Claude Code executes settings hooks without an extra trust step. Expected
+lifecycle: SessionStart → RUNNING, Notification/PermissionRequest →
+NEEDS_ACTION, Stop → DONE, verified the same way as Codex above.
 
 ## Grok Build
 
 | Gate | Status | Evidence |
 |---|---|---|
-| (filled below) | | |
+| SETUP_PREVIEW | D | `pigeonhub setup grok` blocks with "grok was not detected on PATH or by its user configuration" (fail-closed, by design) |
+| REAL_* | D | Grok is not installed on this machine (PATH, `%LOCALAPPDATA%\Programs`, HKCU/HKLM uninstall registry, `~/.grok` all checked — no hits) |
+
+**Owner action:** install Grok Build and sign in (interactive account
+action), then `pigeonhub setup grok` → confirm → run a session. Installing
+Grok autonomously was out of scope per campaign rules (account login
+required for real use).
+
