@@ -253,10 +253,75 @@ class CliCoreTests(unittest.TestCase):
     def test_pc_first_login_displays_request_and_polls_after_approval(self):
         self.credentials.unlink()
         worker = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
-        with patch.object(core, "_print_login_qr"), patch.object(core.time, "sleep"):
+        qr_png = Path(self.temp.name) / "login-qr.png"
+        qr_png.write_bytes(b"png")
+        with patch.object(core, "_render_login_qr_png", return_value=qr_png), \
+                patch.object(core, "_open_qr_image", return_value=True), \
+                patch.object(core.time, "sleep"):
             self.assertEqual(core.login(worker_url=worker), self.credentials)
         self.assertEqual(_Handler.login_polls, 2)
         self.assertTrue(self.credentials.exists())
+        # BETA-001A: the temporary QR PNG is deleted once approval lands.
+        self.assertFalse(qr_png.exists())
+
+    def test_pc_login_removes_temporary_qr_on_error_and_cancel(self):
+        self.credentials.unlink()
+        worker = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        qr_png = Path(self.temp.name) / "login-qr.png"
+        qr_png.write_bytes(b"png")
+        created = (200, {"ok": True, "request_id": "plr_t", "challenge": "phc_t", "poll_secret": "phs_t", "expires_at": "2099-01-01T00:00:00+00:00"})
+        # A poll failure (e.g. expired request) still removes the QR file.
+        with patch.object(core, "_render_login_qr_png", return_value=qr_png), \
+                patch.object(core, "_open_qr_image", return_value=True), \
+                patch.object(core, "http_json", side_effect=[created, (200, {"ok": True, "status": "error", "error": "login request expired"})]):
+            with self.assertRaises(core.CliError):
+                core.login(worker_url=worker)
+        self.assertFalse(qr_png.exists())
+
+        qr_png.write_bytes(b"png")
+        # Ctrl+C before approval cancels cleanly and removes the QR file.
+        def interrupt_during_poll(url, payload=None, **kwargs):
+            if payload and "poll_secret" in payload:
+                raise KeyboardInterrupt
+            return created
+
+        with patch.object(core, "_render_login_qr_png", return_value=qr_png), \
+                patch.object(core, "_open_qr_image", return_value=True), \
+                patch.object(core, "http_json", side_effect=interrupt_during_poll):
+            with self.assertRaises(core.CliError) as cancelled:
+                core.login(worker_url=worker)
+        self.assertIn("cancelled", str(cancelled.exception))
+        self.assertFalse(qr_png.exists())
+        self.assertFalse(self.credentials.exists())
+
+    def test_pc_login_falls_back_to_terminal_qr_when_raster_fails(self):
+        self.credentials.unlink()
+        worker = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        with patch.object(core, "_render_login_qr_png", side_effect=OSError("no image stack")), \
+                patch.object(core, "_print_login_qr") as terminal_qr, \
+                patch.object(core.time, "sleep"):
+            self.assertEqual(core.login(worker_url=worker), self.credentials)
+        terminal_qr.assert_called_once()
+        self.assertTrue(self.credentials.exists())
+
+    def test_login_qr_png_is_large_pure_black_and_white(self):
+        payload = "pigeonhub://login?request_id=plr_" + "a" * 32 + "&challenge=phc_" + "b" * 32
+        try:
+            qr_png = core._render_login_qr_png(payload)
+        except ImportError:
+            self.skipTest("qrcode[pil] not installed")
+        try:
+            from PIL import Image
+            with Image.open(qr_png) as image:
+                width, height = image.size
+                colors = image.convert("RGB").getcolors(maxcolors=8)
+        finally:
+            core._remove_temp_qr(qr_png)
+        self.assertGreaterEqual(width, 512)
+        self.assertGreaterEqual(height, 512)
+        self.assertEqual(width, height)
+        self.assertEqual(len(colors), 2)
+        self.assertEqual({color for _, color in colors}, {(0, 0, 0), (255, 255, 255)})
 
 
 if __name__ == "__main__":

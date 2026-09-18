@@ -99,6 +99,11 @@ fun ConnectionsScreen(
     var selectedTool by remember { mutableStateOf<ToolSpec?>(null) }
     var pendingPcLogin by remember { mutableStateOf<PcLoginRequest?>(null) }
     var approvingPcLogin by remember { mutableStateOf(false) }
+    // BETA-001A: pairing outcomes are localized; nothing hardcoded below.
+    val invalidQrMessage = stringResource(R.string.pairing_invalid_qr)
+    val pcConnectedMessage = stringResource(R.string.pairing_pc_connected)
+    val pcConnectFailedMessage = stringResource(R.string.pairing_pc_connect_failed)
+    val pcQrExpiredMessage = stringResource(R.string.pairing_expired_qr)
 
     val scannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val payload = result.data?.getStringExtra(QrScannerActivity.EXTRA_PAYLOAD)
@@ -106,7 +111,7 @@ fun ConnectionsScreen(
         if (result.resultCode == android.app.Activity.RESULT_OK && request != null) {
             pendingPcLogin = request
         } else if (result.resultCode == android.app.Activity.RESULT_OK) {
-            showSnackbar("This is not a PigeonHub login QR")
+            showSnackbar(invalidQrMessage)
         }
     }
 
@@ -126,10 +131,16 @@ fun ConnectionsScreen(
                 approvingPcLogin = true
                 scope.launch {
                     val request = pendingPcLogin
-                    val approved = request != null && PairingApi.approveLoginRequest(request.requestId, request.challenge)
+                    val approval = request?.let { PairingApi.approveLoginRequest(it.requestId, it.challenge) }
                     approvingPcLogin = false
                     pendingPcLogin = null
-                    showSnackbar(if (approved) "PC connected" else "Unable to connect this PC")
+                    showSnackbar(
+                        when {
+                            approval?.ok == true -> pcConnectedMessage
+                            approval?.expired == true -> pcQrExpiredMessage
+                            else -> pcConnectFailedMessage
+                        },
+                    )
                 }
             },
         )

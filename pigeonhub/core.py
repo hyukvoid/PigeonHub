@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -134,7 +135,9 @@ def http_json(
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(url, data=data, method=method or ("POST" if data else "GET"))
     request.add_header("Content-Type", "application/json")
-    request.add_header("User-Agent", "PigeonHubCLI/0.18")
+    from . import __version__
+
+    request.add_header("User-Agent", f"PigeonHubCLI/{__version__}")
     if bearer:
         request.add_header("Authorization", f"Bearer {bearer}")
     if idempotency_key:
@@ -314,6 +317,65 @@ def _print_login_qr(payload: str) -> None:
         print("".join("##" if cell else "  " for cell in row))
 
 
+def _render_login_qr_png(payload: str) -> Path:
+    """Render the pairing QR as a raster PNG and return its temporary path.
+
+    Phone cameras cannot reliably scan terminal-rendered QR: font metrics,
+    Windows display scaling, line spacing, and terminal cell aspect ratio all
+    distort the modules. The PNG is plain black/white with square modules,
+    integer pixel scaling, and a 4-module quiet zone. The caller must delete
+    the file once login finishes.
+    """
+    import qrcode  # type: ignore
+
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=4, box_size=1)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    modules = qr.modules_count + 2 * qr.border
+    qr.box_size = max(8, math.ceil(512 / modules))
+    fd, raw = tempfile.mkstemp(prefix="pigeonhub-login-", suffix=".png")
+    os.close(fd)
+    path = Path(raw)
+    try:
+        qr.make_image(fill_color="black", back_color="white").save(str(path))
+    except Exception:
+        _remove_temp_qr(path)
+        raise
+    return path
+
+
+def _remove_temp_qr(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _open_qr_image(path: Path) -> bool:
+    """Open the QR PNG in the default image viewer. Best effort, never fatal."""
+    try:
+        if os.name == "nt":
+            os.startfile(str(path))  # type: ignore[attr-defined]  # noqa: S606
+            return True
+    except OSError:
+        pass
+    return False
+
+
+def _print_waiting(deadline: float) -> None:
+    # Cap the display at 99:59 so a bogus server clock can never print an
+    # absurd counter; the real pairing TTL is 10 minutes.
+    remaining = min(99 * 60 + 59, max(0, int(deadline - time.time())))
+    text = f"Waiting for approval... Expires in {remaining // 60:02d}:{remaining % 60:02d}"
+    if sys.stdout.isatty():
+        sys.stdout.write("\r" + text + "  ")
+        sys.stdout.flush()
+    elif not getattr(_print_waiting, "_quiet", False) or time.time() - _print_waiting._last > 60:  # type: ignore[attr-defined]
+        print(text)
+        _print_waiting._quiet = True  # type: ignore[attr-defined]
+        _print_waiting._last = time.time()  # type: ignore[attr-defined]
+
+
 def _save_redeemed_login(body: Mapping[str, Any]) -> Path:
     required = ("endpoint", "write_token", "channel_id")
     if not all(body.get(key) for key in required):
@@ -360,25 +422,58 @@ def _qr_login(*, worker_url: str | None = None) -> Path:
         raise CliError("PC login response was incomplete")
     query = urllib.parse.urlencode({"request_id": request_id, "challenge": challenge})
     payload = str(body.get("qr_payload") or f"pigeonhub://login?{query}")
-    _print_login_qr(payload)
-    print("Waiting for approval... press Ctrl+C to cancel.")
     expires_at = body.get("expires_at")
     try:
         deadline = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00")).timestamp() if expires_at else time.time() + 600
     except ValueError:
         deadline = time.time() + 600
-    while time.time() < deadline:
-        poll_status, poll_body = http_json(
-            f"{base}/v1/pairing/requests/poll",
-            {"request_id": request_id, "poll_secret": poll_secret},
-        )
-        if poll_status == 200 and poll_body.get("status") == "pending":
-            time.sleep(2)
-            continue
-        if poll_status == 200 and poll_body.get("status") == "approved":
-            return _save_redeemed_login(poll_body)
-        raise CliError(f"PC login failed: {poll_body.get('error', poll_status or 'network error')}")
-    raise CliError("PC login request expired before Android approval")
+    qr_image: Path | None = None
+    try:
+        try:
+            qr_image = _render_login_qr_png(payload)
+        except Exception:
+            qr_image = None
+        print("Connect this PC")
+        print()
+        if qr_image is not None:
+            if os.environ.get("PIGEONHUB_NO_OPEN"):
+                print("QR image rendered (automatic opening disabled by PIGEONHUB_NO_OPEN).")
+            elif _open_qr_image(qr_image):
+                print("A QR code has opened in your image viewer.")
+            else:
+                # Fallback only: terminal QR is unreliable on real phone cameras.
+                _print_login_qr(payload)
+        else:
+            # Fallback only: terminal QR is unreliable on real phone cameras.
+            _print_login_qr(payload)
+        print("On your phone:")
+        print("  PigeonHub -> Connections -> Connect PC")
+        print()
+        try:
+            while time.time() < deadline:
+                _print_waiting(deadline)
+                poll_status, poll_body = http_json(
+                    f"{base}/v1/pairing/requests/poll",
+                    {"request_id": request_id, "poll_secret": poll_secret},
+                )
+                if poll_status == 200 and poll_body.get("status") == "pending":
+                    time.sleep(2)
+                    continue
+                if poll_status == 200 and poll_body.get("status") == "approved":
+                    if sys.stdout.isatty():
+                        sys.stdout.write("\n")
+                    return _save_redeemed_login(poll_body)
+                if sys.stdout.isatty():
+                    sys.stdout.write("\n")
+                raise CliError(f"PC login failed: {poll_body.get('error', poll_status or 'network error')}")
+            if sys.stdout.isatty():
+                sys.stdout.write("\n")
+            raise CliError("PC login request expired before Android approval")
+        except KeyboardInterrupt:
+            raise CliError("Login cancelled before approval. The pairing request expires on its own.") from None
+    finally:
+        if qr_image is not None:
+            _remove_temp_qr(qr_image)
 
 
 def login(*, code: str | None = None, qr_image: str | None = None, worker_url: str | None = None, legacy: bool = False) -> Path:
@@ -499,7 +594,7 @@ def _resolve_windows_command(command: Sequence[str]) -> Sequence[str]:
     return command
 
 
-def run_job(command: Sequence[str], *, name: str | None = None, source: str = "cli") -> int:
+def run_job(command: Sequence[str], *, name: str | None = None, source: str = "cli", message: str | None = None) -> int:
     if not command:
         raise CliError("A command is required. Example: pigeonhub run python crawler.py")
     job_name = name or " ".join(command)
@@ -517,7 +612,9 @@ def run_job(command: Sequence[str], *, name: str | None = None, source: str = "c
             job_name=job_name,
             started_at=started,
             title=f"{job_name}: started",
-            message=" ".join(command),
+            # BETA-001B: recipes never transmit their command/prompt to the
+            # worker, so they pass an explicit safe message here.
+            message=" ".join(command) if message is None else message,
         )
     except CliError as exc:
         running = None

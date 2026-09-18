@@ -193,6 +193,13 @@
     <string name="pairing_scan_body">A PC is asking to connect to this PigeonHub account. Approve only if you started pigeonhub login on that PC.</string>
     <string name="pairing_scan_approve">Approve</string>
     <string name="pairing_scan_cancel">Cancel</string>
+    <!-- BETA-001A: QR scanner guide + pairing outcome -->
+    <string name="scanner_title">Scan the QR code</string>
+    <string name="scanner_hint">Place the PigeonHub login QR inside the frame.</string>
+    <string name="pairing_invalid_qr">This is not a PigeonHub login QR.</string>
+    <string name="pairing_expired_qr">The QR code has expired. Run `pigeonhub login` on your PC again.</string>
+    <string name="pairing_pc_connected">PC connected</string>
+    <string name="pairing_pc_connect_failed">Unable to connect this PC</string>
     <string name="tool_comfyui_description">Get notified when your image or video workflow progresses or finishes.</string>
     <string name="tool_comfyui_detail">ComfyUI has a real workflow connection. PigeonHub keeps its connection health here and turns workflow progress and completion into Job Inbox updates.</string>
     <string name="tool_claude_description">Get notified when a Claude task finishes or needs your attention.</string>

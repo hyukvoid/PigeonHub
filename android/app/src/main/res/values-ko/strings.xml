@@ -182,6 +182,13 @@
     <string name="pairing_scan_body">이 PC가 PigeonHub 계정에 연결하려고 해요. 직접 pigeonhub login을 실행한 PC일 때만 승인하세요.</string>
     <string name="pairing_scan_approve">승인</string>
     <string name="pairing_scan_cancel">취소</string>
+    <!-- BETA-001A: QR 스캐너 가이드 + 연결 결과 -->
+    <string name="scanner_title">QR 코드 스캔</string>
+    <string name="scanner_hint">PC에 표시된 PigeonHub QR 코드를 네모 안에 맞춰주세요.</string>
+    <string name="pairing_invalid_qr">PigeonHub QR 코드가 아닙니다.</string>
+    <string name="pairing_expired_qr">QR 코드가 만료되었습니다. PC에서 `pigeonhub login`을 다시 실행해주세요.</string>
+    <string name="pairing_pc_connected">PC가 연결됐어요</string>
+    <string name="pairing_pc_connect_failed">PC를 연결하지 못했어요</string>
     <string name="tool_comfyui_description">이미지·영상 생성 작업의 진행과 완료를 알려드려요.</string>
     <string name="tool_comfyui_detail">ComfyUI는 실제 워크플로 연결을 지원해요. PigeonHub가 연결 상태를 표시하고 워크플로 진행과 완료를 작업 수신함에 알려드려요.</string>
     <string name="tool_claude_description">Claude 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>

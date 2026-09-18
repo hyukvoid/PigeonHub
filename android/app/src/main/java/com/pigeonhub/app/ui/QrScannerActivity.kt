@@ -17,10 +17,13 @@ import android.media.ImageReader
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.Gravity
 import android.view.Surface
 import android.view.TextureView
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -38,6 +41,7 @@ class QrScannerActivity : Activity() {
     }
 
     private lateinit var preview: TextureView
+    private lateinit var guide: ScanFrameView
     private var camera: CameraDevice? = null
     private var reader: ImageReader? = null
     private var cameraThread: HandlerThread? = null
@@ -47,14 +51,35 @@ class QrScannerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preview = TextureView(this)
+        guide = ScanFrameView(this)
+        val hint = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(48, 36, 48, 36)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xB3000000.toInt())
+                cornerRadius = 28 * resources.displayMetrics.density
+            }
+            addView(TextView(this@QrScannerActivity).apply {
+                text = getString(com.pigeonhub.app.R.string.scanner_title)
+                setTextColor(0xffffffff.toInt())
+                textSize = 18f
+                gravity = Gravity.CENTER_HORIZONTAL
+            })
+            addView(
+                TextView(this@QrScannerActivity).apply {
+                    text = getString(com.pigeonhub.app.R.string.scanner_hint)
+                    setTextColor(0xddffffff.toInt())
+                    textSize = 14f
+                    gravity = Gravity.CENTER_HORIZONTAL
+                },
+                LinearLayout.LayoutParams(-2, -2).apply { topMargin = 12 },
+            )
+        }
         val root = FrameLayout(this).apply {
             addView(preview, FrameLayout.LayoutParams(-1, -1))
-            addView(TextView(this@QrScannerActivity).apply {
-                text = "Point the camera at the PigeonHub login QR"
-                setTextColor(0xffffffff.toInt())
-                setBackgroundColor(0x99000000.toInt())
-                setPadding(24, 18, 24, 18)
-            }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = 48 })
+            addView(guide, FrameLayout.LayoutParams(-1, -1))
+            addView(hint, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = 96 })
         }
         setContentView(root)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -129,10 +154,20 @@ class QrScannerActivity : Activity() {
         if (!text.isNullOrBlank()) {
             handled = true
             runOnUiThread {
+                // BETA-001A: one scan = one approval. Freeze the preview, buzz,
+                // then hand the payload to the approval screen.
+                stopCamera()
+                buzz()
                 setResult(RESULT_OK, Intent().putExtra(EXTRA_PAYLOAD, text))
                 finish()
             }
         }
+    }
+
+    private fun buzz() {
+        val vibrator = getSystemService(Vibrator::class.java) ?: return
+        if (!vibrator.hasVibrator()) return
+        vibrator.vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
     private fun imageToNv21(image: Image): ByteArray {
