@@ -219,7 +219,11 @@ def normalize_event(
         return None
     existing = existing or {}
     session = _session_id(raw)
-    stable_id = _safe_id(raw.get("job_id")) or f"agent-{agent}-{session}"
+    # BETA-001B: when the agent runs inside a `pigeonhub run`/recipe job, the
+    # parent owns the Job ID — hook events attach to that existing card
+    # instead of creating a second one for the same execution.
+    parent_job = _safe_id(os.environ.get("PIGEONHUB_JOB_ID"))
+    stable_id = parent_job or _safe_id(raw.get("job_id")) or f"agent-{agent}-{session}"
     safe_name = _safe_text(job_name) or _safe_text(raw.get("job_name")) or _safe_text(raw.get("agent_name"))
     safe_name = safe_name or str(existing.get("job_name") or f"{agent.title()} session")
     started = _safe_text(raw.get("started_at")) or _safe_text(existing.get("started_at")) or _now()
@@ -292,7 +296,8 @@ def publish_agent_event(
     path = state_path or agent_state_path()
     store = _load_state(path)
     session = _session_id(raw)
-    lookup_id = _safe_id(raw.get("job_id")) or f"agent-{agent}-{session}"
+    parent_job = _safe_id(os.environ.get("PIGEONHUB_JOB_ID"))
+    lookup_id = parent_job or _safe_id(raw.get("job_id")) or f"agent-{agent}-{session}"
     previous = store.get(lookup_id) if isinstance(store.get(lookup_id), dict) else {}
     event = normalize_event(agent, raw, existing=previous, job_name=job_name)
     if event is None:
@@ -321,6 +326,11 @@ def publish_agent_event(
         "message": event.attention_reason or event.result_summary or event.state,
         "priority": "high" if event.state in {"NEEDS_ACTION", "FAILED"} else "normal",
     }
+    if event.job_id == _safe_id(os.environ.get("PIGEONHUB_JOB_ID")):
+        # BETA-001B: the parent `pigeonhub run`/recipe job owns the card's
+        # display name; hook events attach richer lifecycle to it without
+        # renaming it.
+        kwargs.pop("job_name", None)
     return publish_job_detailed(event.source, event.job_id, event.state, **kwargs)
 
 
