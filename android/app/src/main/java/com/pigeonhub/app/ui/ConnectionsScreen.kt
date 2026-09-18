@@ -63,7 +63,10 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -245,6 +248,7 @@ private data class ToolSpec(
     val icon: ImageVector,
     val details: String,
     val command: String? = null,
+    val brandIconRes: Int? = null,
 )
 
 private data class PcLoginRequest(val requestId: String, val challenge: String)
@@ -265,12 +269,15 @@ private fun AiAgentCards(
     onSelect: (ToolSpec) -> Unit,
 ) {
     val specs = listOf(
-        ToolSpec("codex", "OpenAI Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "pigeonhub setup codex"),
-        ToolSpec("claude", "Claude Code", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "pigeonhub setup claude"),
-        ToolSpec("grok", "Grok Build", stringResource(R.string.tool_grok_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_grok_detail), "pigeonhub setup grok"),
-        ToolSpec("zcode", "ZCode · GLM", stringResource(R.string.tool_zcode_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.SmartToy, stringResource(R.string.tool_zcode_detail), "pigeonhub setup zcode"),
+        ToolSpec("codex", "OpenAI Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "pigeonhub setup codex", brandIconRes = R.drawable.ic_agent_codex),
+        ToolSpec("claude", "Claude Code", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "pigeonhub setup claude", brandIconRes = R.drawable.ic_agent_claude),
+        ToolSpec("grok", "Grok Build", stringResource(R.string.tool_grok_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_grok_detail), "pigeonhub setup grok", brandIconRes = R.drawable.ic_agent_grok),
+        ToolSpec("zcode", "ZCode · GLM", stringResource(R.string.tool_zcode_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.SmartToy, stringResource(R.string.tool_zcode_detail), "pigeonhub setup zcode", brandIconRes = R.drawable.ic_agent_zcode),
     )
-    specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, "agent", "cli", "codex", "claude", "grok", "zcode"), now) { onSelect(tool) } }
+    // MVP-019 copy audit: each agent card reports its OWN source's health.
+    // A card whose agent never emitted an event shows no health line at all —
+    // never another agent's (or the CLI's) activity.
+    specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, tool.id, "agent"), now) { onSelect(tool) } }
 }
 
 @Composable
@@ -307,7 +314,21 @@ private fun ToolCard(tool: ToolSpec, health: HealthApi.ConnectorHealth?, now: Lo
     ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             CardHeader(
-                icon = { Icon(tool.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp)) },
+                icon = {
+                    val brand = tool.brandIconRes
+                    if (brand != null) {
+                        // MVP-019: official brand tile fills the shared rounded
+                        // container at its own colors — recognizable at a glance.
+                        Image(
+                            painterResource(brand),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Icon(tool.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp))
+                    }
+                },
                 title = tool.title,
                 tagline = tool.description,
             )
@@ -348,7 +369,23 @@ private fun ToolDetailScreen(tool: ToolSpec, showSnackbar: (String) -> Unit, onB
     val copiedMessage = stringResource(R.string.common_copied)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButtonLike(stringResource(R.string.common_back), onBack)
-        CardHeader(icon = { Icon(tool.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp)) }, title = tool.title, tagline = tool.description)
+        CardHeader(
+            icon = {
+                val brand = tool.brandIconRes
+                if (brand != null) {
+                    Image(
+                        painterResource(brand),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Icon(tool.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp))
+                }
+            },
+            title = tool.title,
+            tagline = tool.description,
+        )
         StatusPill(tool.status, tool.status == stringResource(R.string.tool_status_connected))
         Text(tool.details, style = MaterialTheme.typography.bodyLarge)
         if (tool.id == "comfyui") {
@@ -478,9 +515,9 @@ private fun MyPushCard(endpoint: String?, health: HealthApi.ConnectorHealth?, no
 
 /** Shared icon container: all tool glyphs are optically 24dp inside 40dp. */
 @Composable
-internal fun CardHeader(icon: @Composable () -> Unit, title: String, tagline: String?) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.clip(CircleShape).size(40.dp).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) { icon() }
+internal fun CardHeader(icon: @Composable () -> Unit, title: String, tagline: String?, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.clip(RoundedCornerShape(10.dp)).size(40.dp).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) { icon() }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (tagline != null) Text(tagline, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
