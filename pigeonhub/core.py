@@ -7,6 +7,7 @@ Windows distribution remains an MVP-018 concern.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -48,6 +49,22 @@ class PublishResult:
         if self.body.get("raw"):
             return str(self.body["raw"])
         return f"HTTP {self.status or 'network error'}"
+
+    @property
+    def push_status(self) -> str | None:
+        value = self.body.get("push_status")
+        return str(value) if value else None
+
+    @property
+    def delivered(self) -> bool:
+        """True when the server reports the push reached at least one device."""
+        return self.push_status in (None, "fcm_accepted")
+
+    @property
+    def stale_pairing(self) -> bool:
+        """True when delivery failed because the device no longer knows us."""
+        detail = self.detail
+        return "NotRegistered" in detail or "UNREGISTERED" in detail
 
 
 def credentials_path() -> Path:
@@ -112,13 +129,16 @@ def http_json(
     bearer: str | None = None,
     method: str | None = None,
     timeout: float = 30,
+    idempotency_key: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(url, data=data, method=method or ("POST" if data else "GET"))
     request.add_header("Content-Type", "application/json")
-    request.add_header("User-Agent", "PigeonHubCLI/0.16")
+    request.add_header("User-Agent", "PigeonHubCLI/0.18")
     if bearer:
         request.add_header("Authorization", f"Bearer {bearer}")
+    if idempotency_key:
+        request.add_header("Idempotency-Key", idempotency_key)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read().decode("utf-8", "replace")
@@ -180,13 +200,40 @@ def _payload(
     }
 
 
+def _stale_pairing_guidance() -> str:
+    return (
+        "This PC's pairing can no longer reach your phone.\n"
+        "The event was saved, but the device rejected the push.\n\n"
+        "Fix:\n"
+        "  1. Open PigeonHub on your phone and make sure it is signed in.\n"
+        "  2. Run: pigeonhub login   (then scan the QR with the phone)"
+    )
+
+
 def publish_payload(payload: Mapping[str, Any], state: str) -> PublishResult:
+    """Publish one event; retries converge on one stored row.
+
+    MVP-019 semantics: durability and delivery are distinct. A 200 with
+    `stored: true` ends the loop even when `push_status: "failed"` — the row
+    is durable and the delivery outcome is data, not a transport error. Only
+    genuinely ambiguous outcomes (network loss, 5xx, quota) retry, and every
+    attempt carries the same Idempotency-Key so the server replays the first
+    stored row instead of duplicating it.
+    """
     credentials = load_credentials()
+    idempotency_key = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:40]
     attempts = 8 if state in TERMINAL_STATES else 1
     status = 0
     body: dict[str, Any] = {"error": "not attempted"}
     for attempt in range(1, attempts + 1):
-        status, body = http_json(credentials["endpoint"], dict(payload), bearer=credentials["write_token"])
+        status, body = http_json(
+            credentials["endpoint"],
+            dict(payload),
+            bearer=credentials["write_token"],
+            idempotency_key=idempotency_key,
+        )
         stored = status in (200, 201) and bool(body.get("stored"))
         if stored:
             return PublishResult(True, status, body)
@@ -199,13 +246,21 @@ def publish_payload(payload: Mapping[str, Any], state: str) -> PublishResult:
     return PublishResult(False, status, body)
 
 
+def _delivery_note(result: PublishResult) -> str:
+    if result.delivered:
+        return " OK" if not result.body.get("idempotent_replay") else " OK (replayed)"
+    return " saved, delivery failed"
+
+
 def publish_job(source: str, job_id: str, state: str, **kwargs: Any) -> bool:
     """Publish a structured event, retaining the legacy boolean contract."""
     result = publish_payload(_payload(source, job_id, state, **kwargs), state)
     progress = ""
     if kwargs.get("progress") is not None:
         progress = f" {kwargs['progress']}/{kwargs.get('total')}"
-    print(f"[pigeonhub] {state}{progress}" + (" OK" if result.ok else f" FAILED: {result.detail}"))
+    print(f"[pigeonhub] {state}{progress}" + _delivery_note(result))
+    if result.ok and not result.delivered and result.stale_pairing:
+        print(_stale_pairing_guidance(), file=sys.stderr)
     return result.ok
 
 
@@ -214,7 +269,9 @@ def publish_job_detailed(source: str, job_id: str, state: str, **kwargs: Any) ->
     progress = ""
     if kwargs.get("progress") is not None:
         progress = f" {kwargs['progress']}/{kwargs.get('total')}"
-    print(f"[pigeonhub] {state}{progress}" + (" OK" if result.ok else f" FAILED: {result.detail}"))
+    print(f"[pigeonhub] {state}{progress}" + _delivery_note(result))
+    if result.ok and not result.delivered and result.stale_pairing:
+        print(_stale_pairing_guidance(), file=sys.stderr)
     return result
 
 
@@ -223,7 +280,9 @@ def publish_message(title: str, message: str, *, priority: str = "normal") -> Pu
     payload = {"title": title[:500], "message": message[:4000], "priority": priority}
     status, body = http_json(credentials["endpoint"], payload, bearer=credentials["write_token"])
     result = PublishResult(status in (200, 201) and bool(body.get("stored")), status, body)
-    print(f"[pigeonhub] notification" + (" OK" if result.ok else f" FAILED: {result.detail}"))
+    print(f"[pigeonhub] notification" + _delivery_note(result))
+    if result.ok and not result.delivered and result.stale_pairing:
+        print(_stale_pairing_guidance(), file=sys.stderr)
     return result
 
 

@@ -212,13 +212,31 @@ async function durablePublish(env: Env, ctx: PublishContext): Promise<Response> 
   // FCM failed: the message REMAINS in D1 (that is the contract).
   const status = sent.transient ? "pending" : "failed";
   await updatePushStatus(env, ctx.push.message_id, status, null, sent.detail ?? "fcm failed");
+  if (!sent.transient) {
+    // MVP-019: permanent delivery failure (e.g. NotRegistered) after a durable
+    // insert. Durability SUCCEEDED, so this is 200 with the delivery outcome
+    // in the body — a 5xx here taught clients to re-publish a stored event,
+    // which created duplicate rows. Smart clients read push_status and stop.
+    return json({
+      ok: true,
+      message_id: ctx.push.message_id,
+      stored: true,
+      push_status: "failed",
+      seq,
+      error: sent.detail,
+      delivery: { retryable: false },
+    });
+  }
+  // Transient failure: the delivery is still retryable (cron + client), so the
+  // ambiguous 502 stands — retries converge through Idempotency-Key replay.
   return json(
     {
       message_id: ctx.push.message_id,
       stored: true,
-      push_status: status,
+      push_status: "pending",
       seq,
       error: sent.detail,
+      delivery: { retryable: true },
     },
     502,
   );
@@ -240,6 +258,10 @@ async function lookup(
       push_status: result.replay.push_status,
       seq: result.replay.seq,
       idempotent_replay: true,
+      // MVP-019: carry the delivery outcome so a converged retry sees the same
+      // truth as the original attempt (e.g. push_status "failed" + why).
+      error: result.replay.push_status === "failed" ? result.replay.last_error : undefined,
+      delivery: { retryable: result.replay.push_status === "pending" },
     });
   }
   return null;

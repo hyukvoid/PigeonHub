@@ -18,6 +18,9 @@ class _Handler(BaseHTTPRequestHandler):
     requests = []
     fail_running = False
     login_polls = 0
+    publish_mode = "ok"  # ok | stored_failed | flaky_503
+    idempotency_keys: list[str | None] = []
+    flaky_count = 0
 
     def log_message(self, *_args):
         pass
@@ -61,9 +64,24 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True, "endpoint": f"http://{self.server.server_address[0]}:{self.server.server_address[1]}/v1/channels/ch_test/messages", "write_token": "pct_test", "channel_id": "ch_test"})
             return
         if self.path == "/v1/channels/ch_test/messages":
+            self.__class__.idempotency_keys.append(self.headers.get("Idempotency-Key"))
             job = body.get("job") or {}
             if self.__class__.fail_running and job.get("state") == "RUNNING":
                 self._json(503, {"error": "injected running failure"})
+            elif self.__class__.publish_mode == "stored_failed":
+                self._json(200, {
+                    "stored": True,
+                    "message_id": f"m{len(self.__class__.requests)}",
+                    "push_status": "failed",
+                    "error": "fcm send failed: HTTP 404 NotRegistered",
+                    "delivery": {"retryable": False},
+                })
+            elif self.__class__.publish_mode == "flaky_503":
+                self.__class__.flaky_count += 1
+                if self.__class__.flaky_count % 2 == 1:
+                    self._json(503, {"stored": False, "error": "injected"})
+                else:
+                    self._json(201, {"stored": True, "message_id": f"m{len(self.__class__.requests)}"})
             else:
                 self._json(201, {"stored": True, "message_id": f"m{len(self.__class__.requests)}"})
             return
@@ -80,6 +98,9 @@ class CliCoreTests(unittest.TestCase):
         _Handler.requests = []
         _Handler.fail_running = False
         _Handler.login_polls = 0
+        _Handler.publish_mode = "ok"
+        _Handler.idempotency_keys = []
+        _Handler.flaky_count = 0
         self.env = patch.dict(
             os.environ,
             {"PIGEONHUB_CREDENTIALS": str(self.credentials)},
@@ -110,6 +131,39 @@ class CliCoreTests(unittest.TestCase):
 
     def _events(self):
         return [body.get("job", {}) for path, body in _Handler.requests if path.endswith("/messages") and body.get("job")]
+
+    def test_publish_sends_stable_idempotency_key_and_stops_on_stored_failed(self):
+        _Handler.publish_mode = "stored_failed"
+        result = core.publish_job_detailed("cli", "job-mvp019", "DONE", job_name="x")
+        self.assertTrue(result.ok)
+        self.assertFalse(result.delivered)
+        self.assertTrue(result.stale_pairing)
+        # stored-but-failed delivery is durable: exactly one request, no retries.
+        publish_calls = [p for p in _Handler.requests if p[0].endswith("/messages")]
+        self.assertEqual(len(publish_calls), 1)
+        key = _Handler.idempotency_keys[0]
+        self.assertIsInstance(key, str) and self.assertTrue(32 <= len(key) <= 64)
+
+        # The same logical event (identical payload) reuses the identical key.
+        core.publish_payload(
+            core._payload("cli", "job-mvp019", "DONE", job_name="x"),
+            "DONE",
+        )
+        self.assertEqual(_Handler.idempotency_keys[0], _Handler.idempotency_keys[1])
+        # A different event carries a different key.
+        core.publish_payload(
+            core._payload("cli", "job-mvp019", "RUNNING", job_name="x"),
+            "RUNNING",
+        )
+        self.assertNotEqual(_Handler.idempotency_keys[1], _Handler.idempotency_keys[2])
+
+    def test_publish_retries_flaky_503_with_the_same_key(self):
+        _Handler.publish_mode = "flaky_503"
+        result = core.publish_job_detailed("cli", "job-flaky", "DONE", job_name="x")
+        self.assertTrue(result.ok)
+        self.assertTrue(result.delivered)
+        self.assertGreaterEqual(len(_Handler.idempotency_keys), 2)
+        self.assertEqual(len(set(_Handler.idempotency_keys)), 1)
 
     def test_version_flag_and_command_match_single_source(self):
         for argv in (["--version"], ["version"]):
