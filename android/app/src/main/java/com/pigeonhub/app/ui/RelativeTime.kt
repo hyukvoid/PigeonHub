@@ -72,5 +72,25 @@ sealed interface RelativeTime {
                 )
             }
         }
+
+        /**
+         * MVP-019 soft staleness marker: a RUNNING job whose last event is
+         * older than [thresholdMs] gets an honest "no updates for X" line —
+         * never a fabricated terminal state, never a push. Returns null while
+         * the job is fresh.
+         */
+        fun staleNoUpdatesRes(lastEventMs: Long, nowMs: Long, thresholdMs: Long): Pair<Int, IntArray>? {
+            val diff = (nowMs - lastEventMs).coerceAtLeast(0L)
+            if (diff < thresholdMs) return null
+            val minutes = diff / MINUTE_MS
+            return when {
+                minutes < 60L -> R.string.duration_min to intArrayOf(minutes.toInt())
+                minutes < 24L * 60L -> R.string.duration_hr_min to intArrayOf(
+                    (minutes / 60L).toInt(),
+                    (minutes % 60L).toInt(),
+                )
+                else -> R.string.duration_day to intArrayOf((minutes / (24L * 60L)).toInt())
+            }
+        }
     }
 }

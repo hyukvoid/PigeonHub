@@ -145,6 +145,10 @@
     <string name="job_updates_suffix">업데이트 %1$d회</string>
     <string name="job_progress_fraction">%1$s / %2$s</string>
     <string name="job_elapsed">%1$s 경과</string>
+    <!-- MVP-019: 조용해진 RUNNING 작업의 소프트 stale 마커. -->
+    <string name="job_stale_no_updates">%1$s 동안 업데이트 없음</string>
+    <string name="duration_day">%1$d일</string>
+    <string name="duration_day_one">%1$d일</string>
 
     <!-- ComfyUI connector (MVP-007) -->
     <string name="comfyui_title">ComfyUI</string>

@@ -77,4 +77,28 @@ class RelativeTimeTest {
         assertEquals(2, argsH[0])
         assertEquals(3, argsH[1])
     }
+
+    @Test
+    fun `stale no-updates marker respects threshold and buckets`() {
+        val twoHours = 2L * 60L * 60L * 1000L
+        // Fresh job: no marker.
+        assertEquals(null, RelativeTime.staleNoUpdatesRes(t0, t0, twoHours))
+        assertEquals(null, RelativeTime.staleNoUpdatesRes(t0, t0 + twoHours - 1L, twoHours))
+        // Exactly at threshold: stale, minute bucket would not fit — 2h lands in hr+min.
+        val (res2h, args2h) = RelativeTime.staleNoUpdatesRes(t0, t0 + twoHours, twoHours)!!
+        assertEquals(R.string.duration_hr_min, res2h)
+        assertEquals(2, args2h[0])
+        assertEquals(0, args2h[1])
+        // 2h 5m
+        val (resH, argsH) = RelativeTime.staleNoUpdatesRes(t0, t0 + twoHours + 5L * 60_000L, twoHours)!!
+        assertEquals(R.string.duration_hr_min, resH)
+        assertEquals(2, argsH[0])
+        assertEquals(5, argsH[1])
+        // 3 days
+        val (resD, argsD) = RelativeTime.staleNoUpdatesRes(t0, t0 + 3L * 24L * 60L * 60L * 1000L, twoHours)!!
+        assertEquals(R.string.duration_day, resD)
+        assertEquals(3, argsD[0])
+        // Clock skew: last event in the "future" never goes negative-stale.
+        assertEquals(null, RelativeTime.staleNoUpdatesRes(t0 + 60_000L, t0, twoHours))
+    }
 }

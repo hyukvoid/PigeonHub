@@ -84,6 +84,15 @@ import com.pigeonhub.app.push.installation.BootstrapStatus
 import com.pigeonhub.app.push.installation.InstallationRepository
 
 /**
+ * MVP-019: a RUNNING job whose newest event is older than this shows the soft
+ * "no updates for X" marker. Deliberately generous — silent-but-alive jobs are
+ * common (plain `pigeonhub run` emits no progress) — and deliberately soft:
+ * the worker never invents terminal states, so nothing here can cause a
+ * wrong push.
+ */
+const val STALE_RUNNING_MS: Long = 2L * 60L * 60L * 1000L
+
+/**
  * Durable inbox (MVP-001D/002A): the UI renders the Room table as a Flow - the
  * network response is never the screen's source of truth. Offline, the last
  * synced Room contents stay on screen.
@@ -576,6 +585,24 @@ private fun JobCard(item: InboxItem.Job, showSnackbar: (String) -> Unit, now: Lo
                     stringResource(R.string.job_elapsed, stringResource(res, *args.toTypedArray())),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // MVP-019: soft staleness marker. A RUNNING job gone quiet is
+            // labelled honestly ("no updates for X") — never re-stated as
+            // FAILED, never pushed; the user dismisses or investigates.
+            val staleInfo = if (state == JobPayload.State.RUNNING) {
+                RelativeTime.staleNoUpdatesRes(item.entry.local_received_at, now, STALE_RUNNING_MS)
+            } else {
+                null
+            }
+            if (staleInfo != null) {
+                val (res, args) = staleInfo
+                Text(
+                    stringResource(R.string.job_stale_no_updates, stringResource(res, *args.toTypedArray())),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                 )
             }
 

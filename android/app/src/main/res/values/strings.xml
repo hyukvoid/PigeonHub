@@ -155,6 +155,10 @@
     <string name="job_updates_suffix">%1$d updates</string>
     <string name="job_progress_fraction">%1$s / %2$s</string>
     <string name="job_elapsed">Elapsed %1$s</string>
+    <!-- MVP-019: soft staleness marker for RUNNING jobs gone quiet. -->
+    <string name="job_stale_no_updates">No updates for %1$s</string>
+    <string name="duration_day">%1$d days</string>
+    <string name="duration_day_one">%1$d day</string>
 
     <!-- ComfyUI connector (MVP-007) -->
     <string name="comfyui_title">ComfyUI</string>
