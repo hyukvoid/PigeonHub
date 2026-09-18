@@ -1,3 +1,44 @@
+# RESUME — MVP-019 Beta Reliability + Icon Accuracy (2026-09-18)
+
+Branch: `autonomous/mvp019-reliability-icon-hardening-20260918` (from `e40a202`).
+
+## State (source of truth)
+
+- **P0 fixed + deployed**: worker `a308d20c` (prod) / `f2f121a2` (test) —
+  stored-but-502 semantics gone (permanent FCM failure = 200 `push_status:
+  "failed"` + `delivery.retryable:false`; replay carries outcome). CLI sends
+  payload-hash `Idempotency-Key`, retries only when not stored, prints
+  "saved, delivery failed" + re-login guidance on NotRegistered. Verified on
+  the real dead channel (1 event → 1 row; was 8).
+- **Stale RUNNING policy**: soft marker only — RUNNING cards >2h silent show
+  italic "No updates for X" (`STALE_RUNNING_MS` in HomeScreen.kt,
+  `RelativeTime.staleNoUpdatesRes` + tests). No new states, no pushes.
+- **Agent icons**: official brand tiles (Claude/Codex/Grok vectors generated
+  from Wikimedia SVGs via `packaging/icons/generate_brand_tiles.py`; ZCode
+  uses the real desktop mark PNG). Uniform rounded 40dp container across all
+  sections; `ToolSpec.brandIconRes` wins over the material fallback icon.
+- **Health honesty**: agent cards show only their own source's health; unused
+  agents show no line. Creative cards deliberately share the CLI line.
+- **Bonus**: real ZCode desktop session (`sess_0598fadb`) flowed
+  RUNNING→PROGRESS×9→DONE through the installed hooks (fcm_accepted ×11) —
+  MVP-017.5's simulated-payload caveat is closed.
+- Regression: Python 16/16, worker typecheck, Android unit +
+  assembleDebug/Release, `git diff --check`, secret scan. App locale (en-US),
+  font scale, night mode restored after the device walk.
+
+## Owner actions / next steps
+
+1. Re-pair the PC via physical phone QR (replaces the test-minted connector
+   token; revocation command in MVP-017.5 SECURITY.md).
+2. Claude quota → one real `claude -p` session (hooks installed; Codex fully
+   verified, ZCode real-session verified).
+3. Codex TUI `/hooks` trust (one-time) for normal Codex sessions.
+4. Code-signing certificate before wide beta (SmartScreen otherwise).
+5. Optional next reliability item: CLI keepalive ping for long silent jobs →
+   enables true server-side staleness detection.
+
+---
+
 # RESUME — MVP-017.5 + MVP-018 overnight campaign (2026-09-18)
 
 Branch: `autonomous/mvp0175-mvp018-zcode-overnight-20260918` (from `36e2cd5`).
