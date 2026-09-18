@@ -91,7 +91,7 @@
     <string name="connections_curl_copied">cURL을 클립보드에 복사했어요</string>
 
     <string name="github_title">GitHub</string>
-    <string name="github_tagline">빌드 결과를 받아보세요</string>
+    <string name="github_tagline">워크플로가 끝나거나 실패하면 알려드려요.</string>
     <string name="github_connect">연결하기</string>
     <string name="github_connected">연결됨</string>
     <string name="github_not_connected">연결 안 됨</string>
@@ -203,8 +203,8 @@
     <string name="tool_custom_agent_detail">특정 업체 전용 연결은 없어요. 로컬 명령을 감싸면 같은 진행·완료·실패 알림을 받을 수 있어요.</string>
     <string name="tool_framepack_description">긴 영상 생성이 끝나거나 실패하면 알려드려요.</string>
     <string name="tool_framepack_detail">FramePack은 공통 명령줄 래퍼로 지원해요. 설치 방식에 따라 명령이 달라 실제 명령은 자리표시자로 남겨뒀어요.</string>
-    <string name="tool_topaz_description">업스케일·프레임 보간·영상 처리가 끝나면 알려드려요.</string>
-    <string name="tool_topaz_detail">Topaz Video AI는 공통 명령줄 래퍼로 지원해요. 여기서 별도 서비스 설정이나 인증 정보를 요구하지 않아요.</string>
+    <string name="tool_topaz_description">영상 향상·렌더가 끝나면 알려드려요.</string>
+    <string name="tool_topaz_detail">Topaz Video는 공통 명령줄 래퍼로 지원해요. 여기서 별도 서비스 설정이나 인증 정보를 요구하지 않아요.</string>
     <string name="tool_blender_description">오래 걸리는 렌더링이 끝나거나 실패하면 알려드려요.</string>
     <string name="tool_blender_detail">Blender는 공통 명령줄 래퍼로 지원해요. 예시는 Blender 백그라운드 렌더링과 현재 래퍼 인자 규약을 사용해요.</string>
 

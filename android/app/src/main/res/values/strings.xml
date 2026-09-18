@@ -97,7 +97,7 @@
     <!-- GitHub connection -->
     <string name="github_manage">Manage on GitHub</string>
     <string name="github_title">GitHub</string>
-    <string name="github_tagline">Get build alerts</string>
+    <string name="github_tagline">Get notified when your workflow finishes or fails.</string>
     <string name="github_connect">Connect</string>
     <string name="github_connected">Connected</string>
     <string name="github_not_connected">Not connected</string>
@@ -214,8 +214,8 @@
     <string name="tool_custom_agent_detail">There is no vendor-specific connection here. Wrap a local command to receive the same progress, completion, and failure alerts.</string>
     <string name="tool_framepack_description">Get notified when a long video generation finishes or fails.</string>
     <string name="tool_framepack_detail">FramePack is supported through the shared command-line wrapper. The example keeps the actual FramePack command as a placeholder because it depends on your local install.</string>
-    <string name="tool_topaz_description">Get notified when upscaling, interpolation, or video processing finishes.</string>
-    <string name="tool_topaz_detail">Topaz Video AI is supported through the shared command-line wrapper. No separate service setup or credential is needed here.</string>
+    <string name="tool_topaz_description">Get notified when a video enhancement or render finishes.</string>
+    <string name="tool_topaz_detail">Topaz Video is supported through the shared command-line wrapper. No separate service setup or credential is needed here.</string>
     <string name="tool_blender_description">Get notified when a long render finishes or fails.</string>
     <string name="tool_blender_detail">Blender is supported through the shared command-line wrapper. The example uses Blender background rendering and the current wrapper argument contract.</string>
 

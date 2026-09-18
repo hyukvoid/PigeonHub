@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,10 +64,9 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -287,10 +287,10 @@ private fun CreativeToolCards(
     onSelect: (ToolSpec) -> Unit,
 ) {
     val specs = listOf(
-        ToolSpec("comfyui", "ComfyUI", stringResource(R.string.tool_comfyui_description), comfyStatus(health), comfyAction(health), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_comfyui_detail)),
+        ToolSpec("comfyui", "ComfyUI", stringResource(R.string.tool_comfyui_description), comfyStatus(health), comfyAction(health), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_comfyui_detail), brandIconRes = R.drawable.ic_brand_comfyui),
         ToolSpec("framepack", "FramePack", stringResource(R.string.tool_framepack_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Movie, stringResource(R.string.tool_framepack_detail), "pigeonhub run --name \"FramePack generation\" -- <your command>"),
-        ToolSpec("topaz", "Topaz Video AI", stringResource(R.string.tool_topaz_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Build, stringResource(R.string.tool_topaz_detail), "pigeonhub run --name \"Topaz Video AI\" -- <your command>"),
-        ToolSpec("blender", "Blender", stringResource(R.string.tool_blender_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Extension, stringResource(R.string.tool_blender_detail), "pigeonhub run --name \"Blender render\" -- blender -b project.blend -a"),
+        ToolSpec("topaz", "Topaz Video", stringResource(R.string.tool_topaz_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Build, stringResource(R.string.tool_topaz_detail), "pigeonhub run --name \"Topaz Video\" -- <your command>", brandIconRes = R.drawable.ic_brand_topaz),
+        ToolSpec("blender", "Blender", stringResource(R.string.tool_blender_description), stringResource(R.string.tool_status_cli_supported), stringResource(R.string.tool_action_howto), Icons.Outlined.Extension, stringResource(R.string.tool_blender_detail), "pigeonhub run --name \"Blender render\" -- blender -b project.blend -a", brandIconRes = R.drawable.ic_brand_blender),
     )
     specs.forEach { tool -> ToolCard(tool, HealthApi.merge(health, if (tool.id == "comfyui") "comfyui" else "cli"), now) { onSelect(tool) } }
 }
@@ -472,7 +472,21 @@ private fun GitHubConnectionCard(connected: Boolean, health: HealthApi.Connector
     val open = { launcher.launch(Intent(Intent.ACTION_VIEW, Uri.parse(com.pigeonhub.app.push.installation.GitHubConnect.installUrl()))); Unit }
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            CardHeader(icon = { Image(painterResource(R.drawable.ic_github_mark), null, colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimaryContainer), modifier = Modifier.size(24.dp)) }, title = stringResource(R.string.github_title), tagline = stringResource(R.string.github_tagline))
+            CardHeader(
+                icon = {
+                    // MVP-019.1: official Invertocat in its official monochrome —
+                    // near-black on light, white on dark. Never theme-tinted.
+                    val dark = isSystemInDarkTheme()
+                    Icon(
+                        painterResource(R.drawable.ic_github_mark),
+                        contentDescription = null,
+                        tint = if (dark) Color.White else Color(0xFF0D1117),
+                        modifier = Modifier.size(26.dp),
+                    )
+                },
+                title = stringResource(R.string.github_title),
+                tagline = stringResource(R.string.github_tagline),
+            )
             StatusPill(if (connected) stringResource(R.string.github_connected) else stringResource(R.string.github_not_connected), connected)
             HealthLine(health, now)
             if (connected) OutlinedButton(onClick = open, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.github_manage)) }
