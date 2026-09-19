@@ -9,6 +9,7 @@ existing setup/pairing engines (no logic duplication, no command execution).
 import base64
 import http.client
 import json
+import tempfile
 import threading
 import time
 import unittest
@@ -125,8 +126,8 @@ class OnboardServerTests(unittest.TestCase):
         from pathlib import Path
 
         plan = SetupPlan(
-            agent="codex",
-            detection=AgentDetection("codex", "codex", None, Path("x"), True),
+            agent="zcode",
+            detection=AgentDetection("zcode", "zcode", None, Path("x"), True),
             target=Path("x"), exists=False, changed=True,
             desired=None, change_lines=(),
         )
@@ -134,19 +135,48 @@ class OnboardServerTests(unittest.TestCase):
                 patch.object(ob.agent_engine, "apply_setup", return_value=None) as a:
             code, body = self.request(
                 "POST", f"/api/action?session={self.session}",
+                {"action": "SETUP_ZCODE", "confirm": True})
+        self.assertEqual(code, 200)
+        self.assertTrue(json.loads(body)["ok"])
+        b.assert_called_once_with("zcode")
+        a.assert_called_once_with(plan)
+
+    def test_setup_codex_uses_notify_engine_and_never_touches_hooks(self):
+        connected = ob.codex_integration.CodexConnectResult(
+            ob.codex_integration.CONNECTED_BASIC, "Codex notify connected", "0.152.1")
+        with patch.object(ob.codex_integration, "connect_codex", return_value=connected) as c, \
+                patch.object(ob.agent_engine, "build_setup_plan") as b, \
+                patch.object(ob.agent_engine, "apply_setup") as a:
+            code, body = self.request(
+                "POST", f"/api/action?session={self.session}",
                 {"action": "SETUP_CODEX", "confirm": True})
         self.assertEqual(code, 200)
         self.assertTrue(json.loads(body)["ok"])
-        b.assert_called_once_with("codex")
-        a.assert_called_once_with(plan)
+        c.assert_called_once_with()
+        b.assert_not_called()  # hooks.json is never written by the Setup Center
+        a.assert_not_called()
+        self.assertEqual(self.center.state.agent_events["codex"], {"state": "connected", "detail": "notify"})
+
+    def test_setup_codex_attention_preserves_everything(self):
+        attention = ob.codex_integration.CodexConnectResult(
+            ob.codex_integration.NEEDS_ATTENTION, "existing notify preserved")
+        with patch.object(ob.codex_integration, "connect_codex", return_value=attention), \
+                patch.object(ob.agent_engine, "build_setup_plan") as b:
+            code, body = self.request(
+                "POST", f"/api/action?session={self.session}",
+                {"action": "SETUP_CODEX", "confirm": True})
+        self.assertEqual(code, 200)
+        self.assertFalse(json.loads(body)["ok"])
+        b.assert_not_called()
+        self.assertEqual(self.center.state.agent_events["codex"]["state"], "attention")
 
     def test_setup_agent_noop_does_not_touch_config(self):
         from pigeonhub.agents import SetupPlan, AgentDetection
         from pathlib import Path
 
         plan = SetupPlan(
-            agent="codex",
-            detection=AgentDetection("codex", "codex", None, Path("x"), True),
+            agent="zcode",
+            detection=AgentDetection("zcode", "zcode", None, Path("x"), True),
             target=Path("x"), exists=True, changed=False,
             desired=None, change_lines=(),
         )
@@ -154,10 +184,78 @@ class OnboardServerTests(unittest.TestCase):
                 patch.object(ob.agent_engine, "apply_setup") as a:
             code, body = self.request(
                 "POST", f"/api/action?session={self.session}",
-                {"action": "SETUP_CODEX", "confirm": True})
+                {"action": "SETUP_ZCODE", "confirm": True})
         self.assertEqual(code, 200)
         self.assertTrue(json.loads(body)["already"])
         a.assert_not_called()
+
+    def test_remove_codex_proceeds_when_notify_slot_is_foreign(self):
+        # NEEDS_ATTENTION on removal means the slot holds a foreign program —
+        # nothing of ours exists in config.toml, so hook cleanup must proceed.
+        attention = ob.codex_integration.CodexConnectResult(
+            ob.codex_integration.NEEDS_ATTENTION, "existing notify preserved")
+        from pigeonhub.agents import SetupPlan, AgentDetection
+        from pathlib import Path
+
+        plan = SetupPlan(
+            agent="codex",
+            detection=AgentDetection("codex", "codex", None, Path("x"), True),
+            target=Path("x"), exists=True, changed=True,
+            desired=None, change_lines=(),
+        )
+        with patch.object(ob.codex_integration, "remove_codex", return_value=attention) as r, \
+                patch.object(ob.agent_engine, "build_setup_plan", return_value=plan) as b, \
+                patch.object(ob.agent_engine, "remove_setup", return_value=None) as rs:
+            code, body = self.request(
+                "POST", f"/api/action?session={self.session}",
+                {"action": "REMOVE_CODEX", "confirm": True})
+        self.assertEqual(code, 200)
+        self.assertTrue(json.loads(body)["ok"])
+        r.assert_called_once_with()
+        b.assert_called_once_with("codex", remove=True)
+        rs.assert_called_once_with(plan)
+
+    def test_codex_state_reflects_notify_plan_and_hooks_fallback(self):
+        from pigeonhub import codex_integration as ci
+
+        connected = ci.CodexNotifyPlan(
+            detection=ci.CodexDetection("codex", "0.152.1", Path("h"), Path("h/c"), True),
+            target=Path("h/c"), desired_argv=("x",), changed=False,
+            status=ci.CONNECTED_BASIC, reason=None, updated_text=None)
+        blocked = ci.CodexNotifyPlan(
+            detection=ci.CodexDetection("codex", "0.152.1", Path("h"), Path("h/c"), True),
+            target=Path("h/c"), desired_argv=("x",), changed=False,
+            status=ci.NEEDS_ATTENTION, reason="existing notify preserved", updated_text=None)
+        missing = ci.CodexNotifyPlan(
+            detection=ci.CodexDetection(None, None, Path("h"), Path("h/c"), False),
+            target=Path("h/c"), desired_argv=("x",), changed=False,
+            status=ci.NOT_INSTALLED, reason="Codex was not detected", updated_text=None)
+        with patch.object(ci, "build_codex_notify_plan", return_value=connected):
+            self.assertEqual(ob._codex_local_state(), {"state": "connected", "detail": "notify"})
+        with patch.object(ci, "build_codex_notify_plan", return_value=missing):
+            self.assertEqual(ob._codex_local_state(), {"state": "not_detected", "detail": ""})
+        with patch.object(ci, "build_codex_notify_plan", return_value=blocked), \
+                patch.object(ob.agent_engine, "detect_agent") as det, \
+                patch.object(ob.agent_engine, "_read_json", return_value={}), \
+                patch.object(ob.agent_engine, "_managed_count", return_value=2):
+            det.config_present = True
+            self.assertEqual(ob._codex_local_state(), {"state": "connected", "detail": "hooks"})
+        with patch.object(ci, "build_codex_notify_plan", return_value=blocked), \
+                patch.object(ob.agent_engine, "detect_agent") as det, \
+                patch.object(ob.agent_engine, "_read_json", return_value={}), \
+                patch.object(ob.agent_engine, "_managed_count", return_value=0):
+            det.config_present = True
+            self.assertEqual(ob._codex_local_state(), {"state": "attention", "detail": "existing notify preserved"})
+
+    def test_status_reports_already_paired(self):
+        with tempfile.TemporaryDirectory() as directory:
+            credentials = Path(directory) / "credentials.json"
+            with patch.object(ob, "credentials_path", return_value=credentials):
+                code, body = self.request("GET", f"/api/status?session={self.session}")
+                self.assertFalse(json.loads(body)["already_paired"])
+                credentials.write_text("{}", encoding="utf-8")
+                code, body = self.request("GET", f"/api/status?session={self.session}")
+                self.assertTrue(json.loads(body)["already_paired"])
 
     def test_remove_agent_uses_engine_remove(self):
         from pigeonhub.agents import SetupPlan, AgentDetection

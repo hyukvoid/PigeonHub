@@ -45,6 +45,7 @@ from .core import (
     DEFAULT_WORKER_URL,
     CliError,
     _render_login_qr_png,
+    credentials_path,
     http_json,
     publish_message,
     _save_redeemed_login,
@@ -99,6 +100,47 @@ def _expiry_remaining(pairing: PairingState) -> int:
     return max(0, int(pairing.expires_at - time.time()))
 
 
+def _codex_local_state() -> dict:
+    """Read-only Codex state for the tools screen, from the real sources.
+
+    The notify plan is queried without writing anything. When the single
+    upstream notify slot is occupied by a non-PigeonHub program (for example
+    Codex Desktop's own computer-use bridge), it is preserved and the state
+    falls back to the hook-based integration if PigeonHub-managed hooks are
+    actually installed — the card must reflect what is really connected, not
+    what a fresh install would do.
+    """
+    try:
+        plan = codex_integration.build_codex_notify_plan()
+    except Exception:
+        return {"state": "attention", "detail": "codex"}
+    version = plan.detection.version or ""
+    if plan.status == codex_integration.CONNECTED_BASIC:
+        return {"state": "connected", "detail": "notify"}
+    if plan.status == codex_integration.NOT_INSTALLED:
+        return {"state": "not_detected", "detail": version}
+    if plan.status == codex_integration.NEEDS_ATTENTION:
+        try:
+            detection = agent_engine.detect_agent("codex")
+            hooks = agent_engine._read_json(detection.config_path) if detection.config_present else {}
+            if agent_engine._managed_count(hooks, "codex") > 0:
+                return {"state": "connected", "detail": "hooks"}
+        except agent_engine.AgentSetupError:
+            pass
+        return {"state": "attention", "detail": "existing notify preserved"}
+    return {"state": "detected", "detail": version}
+
+
+def _codex_event(result: "codex_integration.CodexConnectResult") -> dict:
+    if result.status == codex_integration.CONNECTED_BASIC:
+        return {"state": "connected", "detail": "notify"}
+    if result.status == codex_integration.NOT_INSTALLED:
+        return {"state": "not_detected", "detail": ""}
+    if result.status == codex_integration.NEEDS_ATTENTION:
+        return {"state": "attention", "detail": "existing notify preserved"}
+    return {"state": "detected", "detail": result.version or ""}
+
+
 class SetupCenter:
     """Owns the session state, the pairing poller, and the action handlers."""
 
@@ -111,6 +153,9 @@ class SetupCenter:
         p = self.state.pairing
         return {
             "lang": self.state.lang,
+            # A returning user must not be forced through QR pairing again;
+            # the persisted credential is the source of truth for this step.
+            "already_paired": credentials_path().exists(),
             "pairing": {
                 "status": p.status,
                 "expires_in": _expiry_remaining(p) if p.status == "waiting" else 0,
@@ -127,12 +172,15 @@ class SetupCenter:
             event = self.state.agent_events.get(agent, {})
             entry = {"id": agent, **event}
             if "state" not in entry:
-                try:
-                    det = agent_engine.detect_agent(agent)
-                except agent_engine.AgentSetupError:
-                    det = None
-                entry["state"] = "detected" if (det and det.detected) else "not_detected"
-                entry["detail"] = (det.version if det and det.version else "")
+                if agent == "codex":
+                    entry.update(_codex_local_state())
+                else:
+                    try:
+                        det = agent_engine.detect_agent(agent)
+                    except agent_engine.AgentSetupError:
+                        det = None
+                    entry["state"] = "detected" if (det and det.detected) else "not_detected"
+                    entry["detail"] = (det.version if det and det.version else "")
             out.append(entry)
         return out
 
@@ -242,14 +290,7 @@ class SetupCenter:
         def worker() -> None:
             try:
                 result = codex_integration.connect_codex()
-                if result.status == codex_integration.CONNECTED_BASIC:
-                    event = {"state": "connected", "detail": "notify"}
-                elif result.status == codex_integration.NOT_INSTALLED:
-                    event = {"state": "not_detected", "detail": ""}
-                elif result.status == codex_integration.NEEDS_ATTENTION:
-                    event = {"state": "attention", "detail": "existing notify preserved"}
-                else:
-                    event = {"state": "detected", "detail": ""}
+                event = _codex_event(result)
             except Exception:
                 event = {"state": "attention", "detail": "automatic setup failed"}
             self.state.agent_events["codex"] = event
@@ -257,6 +298,18 @@ class SetupCenter:
         threading.Thread(target=worker, name="pigeonhub-codex-connect", daemon=True).start()
 
     def setup_agent(self, agent: str) -> dict:
+        if agent == "codex":
+            # The Setup Center connects Codex through its supported notify
+            # completion event only; hook-based lifecycle stays an explicit
+            # CLI choice (`pigeonhub setup codex`) because it requires Codex's
+            # own trust flow.
+            try:
+                result = codex_integration.connect_codex()
+            except Exception:
+                self.state.agent_events[agent] = {"state": "attention", "detail": "automatic setup failed"}
+                return {"ok": False, "error": "attention"}
+            self.state.agent_events[agent] = _codex_event(result)
+            return {"ok": result.status == codex_integration.CONNECTED_BASIC}
         plan = agent_engine.build_setup_plan(agent)
         if plan.blocked_reason:
             self.state.agent_events[agent] = {"state": "attention", "detail": "blocked"}
@@ -269,12 +322,15 @@ class SetupCenter:
         return {"ok": True}
 
     def remove_agent(self, agent: str) -> dict:
-        codex_result = None
         if agent == "codex":
-            codex_result = codex_integration.remove_codex()
-            if codex_result.status == codex_integration.NEEDS_ATTENTION:
-                self.state.agent_events[agent] = {"state": "attention", "detail": "existing notify preserved"}
-                return {"ok": False, "error": "blocked"}
+            # Removing the managed notify is best effort: NEEDS_ATTENTION from
+            # the removal plan can only mean the notify slot holds something
+            # that is not ours (it was never touched), so the hook cleanup
+            # below must still proceed.
+            try:
+                codex_integration.remove_codex()
+            except Exception:
+                pass
         plan = agent_engine.build_setup_plan(agent, remove=True)
         if plan.blocked_reason:
             self.state.agent_events[agent] = {"state": "attention", "detail": "blocked"}

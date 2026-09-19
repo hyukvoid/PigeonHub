@@ -28,6 +28,7 @@ STRINGS = {
         "consent_body": "PigeonHub가 설치된 Codex, ZCode 등의 작업 완료 알림을 연결할 수 있습니다.",
         "consent_check": "지원되는 도구 자동 연결",
         "start_pairing": "휴대폰 연결 시작",
+        "already_paired": "휴대폰이 이미 연결돼 있어요 ✓",
         "waiting": "휴대폰 스캔을 기다리는 중…",
         "approved": "휴대폰 연결 완료 ✓",
         "expired": "QR 코드가 만료됐어요.",
@@ -90,6 +91,7 @@ STRINGS = {
         "consent_body": "PigeonHub can connect completion notifications from installed tools such as Codex and ZCode.",
         "consent_check": "Automatically connect supported tools",
         "start_pairing": "Start phone connection",
+        "already_paired": "Your phone is already connected ✓",
         "waiting": "Waiting for your phone…",
         "approved": "Phone connected ✓",
         "expired": "This QR has expired.",
@@ -211,6 +213,9 @@ _TEMPLATE = """<!doctype html>
       <label style="display:block;margin-top:12px"><input id="autoConnectConsent" type="checkbox"> __CONSENT_CHECK__</label>
     </div>
     <button id="startPairingBtn" class="cta" onclick="startPairing()" disabled>__START_PAIRING__</button>
+    <div id="alreadyPaired" class="hidden">
+      <p style="color:var(--ok);font-weight:600;margin:14px 0 0">__ALREADY_PAIRED__</p>
+    </div>
     <img id="qr" class="qr" alt="QR">
     <div id="qrMsg" class="msg"></div>
     <div id="pairStatus" class="timer"></div>
@@ -292,9 +297,24 @@ function go(view) {
   if (view === 'phone') {
     const consent = document.getElementById('autoConnectConsent');
     if (consent) consent.onchange = () => { document.getElementById('startPairingBtn').disabled = !consent.checked; };
+    refreshPhone();
   }
   if (view === 'tools') renderAgents();
   if (view === 'done') stopPoll();
+}
+// A returning user must never be forced back through QR pairing: the
+// persisted credential satisfies the phone step on its own.
+async function refreshPhone() {
+  const s = await status();
+  const p = s.pairing || {};
+  if (s.already_paired && p.status !== 'waiting') {
+    document.getElementById('pairStatus').textContent = '';
+    document.getElementById('alreadyPaired').classList.remove('hidden');
+    document.getElementById('startPairingBtn').classList.add('hidden');
+    document.getElementById('toTools').classList.remove('hidden');
+    return;
+  }
+  if (p.status === 'waiting') pollPairing();
 }
 async function startPairing() {
   const consent = document.getElementById('autoConnectConsent');
@@ -444,6 +464,7 @@ def render_page(token: str, lang: str) -> str:
         "__CONSENT_BODY__": strings["consent_body"],
         "__CONSENT_CHECK__": strings["consent_check"],
         "__START_PAIRING__": strings["start_pairing"],
+        "__ALREADY_PAIRED__": strings["already_paired"],
         "__NEW_QR__": strings["new_qr"],
         "__NEXT_TOOLS__": strings["next_tools"],
         "__TOOLS_TITLE__": strings["tools_title"],
