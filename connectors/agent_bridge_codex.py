@@ -4,6 +4,12 @@
 Wraps a real ``codex exec --json`` session and maps public JSONL lifecycle
 events onto the four-state PigeonHub Job Model. Prompts, source files, full
 tool input, and agent messages are deliberately not forwarded.
+
+BETA-002 compatibility note (verified against codex-cli 0.152.1): the public
+event stream is ``thread.started``/``turn.started``/``item.completed``
+(item = {id, text, type})/``turn.completed`` (usage = token counters), and
+there is no terminal ``stop`` event in the stream — the bridge publishes the
+terminal event itself from the process exit code.
 """
 
 import argparse
@@ -15,6 +21,31 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pigeonhub.agents import publish_agent_event  # noqa: E402
+
+# Public event types the bridge understands; anything else is ignored.
+LIFECYCLE_EVENT_TYPES = ("thread.started", "item.completed", "turn.completed", "error")
+
+
+def lifecycle_from_line(line: str) -> dict | None:
+    """One public JSONL line → an adapter-safe raw event, or None.
+
+    Only the event type (and the thread id for ``thread.started``) is
+    extracted; ``item`` payloads (assistant text) and ``usage`` counters are
+    dropped here, so the allowlist privacy boundary is structural, not a
+    matter of downstream discipline.
+    """
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return None  # non-JSON noise (banners, hook prints)
+    if not isinstance(event, dict):
+        return None
+    etype = event.get("type")
+    if etype == "thread.started":
+        return {"type": etype, "thread_id": str(event.get("thread_id") or "session")}
+    if etype in {"item.completed", "turn.completed", "error"}:
+        return {"type": etype}
+    return None
 
 
 def main():
@@ -40,16 +71,12 @@ def main():
     )
     assert proc.stdout is not None
     for line in proc.stdout:
-        line = line.strip()
-        if not line:
+        event = lifecycle_from_line(line.strip())
+        if event is None:
             continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue  # non-JSON noise (banners, hook prints)
-        etype = event.get("type")
+        etype = event["type"]
         if etype == "thread.started":
-            session_id = str(event.get("thread_id") or "session")
+            session_id = event["thread_id"]
             job_id = f"agent-codex-{session_id[:48]}"
             publish_agent_event(
                 "codex",

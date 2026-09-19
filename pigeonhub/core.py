@@ -520,8 +520,8 @@ def status(*, quiet: bool = False) -> dict[str, Any]:
         "worker_reachable": health_status == 200 and bool(health.get("ok")),
     }
     if not quiet:
-        print(f"Logged in - channel {credentials['channel_id'][:12]}...")
-        print(f"Worker: {'reachable' if value['worker_reachable'] else 'unreachable'}")
+        print(f"Connected - channel {credentials['channel_id'][:12]}...")
+        print(f"Server: {'reachable' if value['worker_reachable'] else 'unreachable'}")
     return value
 
 

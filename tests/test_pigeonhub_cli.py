@@ -18,9 +18,10 @@ class _Handler(BaseHTTPRequestHandler):
     requests = []
     fail_running = False
     login_polls = 0
-    publish_mode = "ok"  # ok | stored_failed | flaky_503
+    publish_mode = "ok"  # ok | stored_failed | flaky_503 | drop_terminal
     idempotency_keys: list[str | None] = []
     flaky_count = 0
+    dropped_keys: list[str] = []
 
     def log_message(self, *_args):
         pass
@@ -68,6 +69,15 @@ class _Handler(BaseHTTPRequestHandler):
             job = body.get("job") or {}
             if self.__class__.fail_running and job.get("state") == "RUNNING":
                 self._json(503, {"error": "injected running failure"})
+            elif self.__class__.publish_mode == "drop_terminal" and job.get("state") != "RUNNING":
+                # Simulate the network vanishing right after RUNNING: accept the
+                # first attempt, then silently drop the connection so the CLI
+                # sees a transport error and must retry with the same key.
+                if self.__class__.idempotency_keys[-1] not in self.__class__.dropped_keys:
+                    self.__class__.dropped_keys.append(self.__class__.idempotency_keys[-1])
+                    self.close_connection = True
+                    return
+                self._json(201, {"stored": True, "message_id": f"m{len(self.__class__.requests)}"})
             elif self.__class__.publish_mode == "stored_failed":
                 self._json(200, {
                     "stored": True,
@@ -101,6 +111,7 @@ class CliCoreTests(unittest.TestCase):
         _Handler.publish_mode = "ok"
         _Handler.idempotency_keys = []
         _Handler.flaky_count = 0
+        _Handler.dropped_keys = []
         self.env = patch.dict(
             os.environ,
             {"PIGEONHUB_CREDENTIALS": str(self.credentials)},
@@ -164,6 +175,36 @@ class CliCoreTests(unittest.TestCase):
         self.assertTrue(result.delivered)
         self.assertGreaterEqual(len(_Handler.idempotency_keys), 2)
         self.assertEqual(len(set(_Handler.idempotency_keys)), 1)
+
+    def test_terminal_publish_survives_network_drop_without_duplication(self):
+        # RUNNING is accepted; the network dies on the first DONE attempt and
+        # the retry lands. One row per event, same key on the retry.
+        _Handler.publish_mode = "drop_terminal"
+        with patch.object(core.time, "sleep"):
+            result = core.publish_job_detailed("cli", "job-drop", "RUNNING", job_name="x")
+            self.assertTrue(result.ok)
+            done = core.publish_job_detailed("cli", "job-drop", "DONE", job_name="x")
+        self.assertTrue(done.ok)
+        self.assertTrue(done.delivered)
+        running_keys = _Handler.idempotency_keys[:1]
+        done_keys = [k for k in _Handler.idempotency_keys[1:] if k]
+        self.assertEqual(len(set(done_keys)), 1, "retry must reuse the same idempotency key")
+        self.assertNotEqual(running_keys[0], done_keys[0])
+        # Two DONE requests reach the server (the dropped attempt + the retry),
+        # but they share one key, so the worker stores exactly one row — the
+        # idempotency behavior asserted in the flaky-503 test above.
+        done_attempts = [b for _, b in _Handler.requests if (b.get("job") or {}).get("state") == "DONE"]
+        self.assertEqual(len(done_attempts), 2)
+
+    def test_stale_pairing_prints_recovery_guidance(self):
+        _Handler.publish_mode = "stored_failed"
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            result = core.publish_job_detailed("cli", "job-dead", "DONE", job_name="x")
+        self.assertTrue(result.ok)  # durable: stored, delivery failed
+        self.assertTrue(result.stale_pairing)
+        self.assertIn("pairing can no longer reach your phone", stderr.getvalue())
+        self.assertIn("pigeonhub login", stderr.getvalue())
 
     def test_version_flag_and_command_match_single_source(self):
         for argv in (["--version"], ["version"]):
