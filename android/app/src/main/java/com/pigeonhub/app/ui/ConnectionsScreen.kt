@@ -77,6 +77,7 @@ import com.pigeonhub.app.push.installation.BootstrapStatus
 import com.pigeonhub.app.push.installation.HealthApi
 import com.pigeonhub.app.push.installation.InstallationRepository
 import com.pigeonhub.app.push.installation.PairingApi
+import com.pigeonhub.app.push.installation.PcPairingState
 import kotlinx.coroutines.launch
 
 /**
@@ -132,6 +133,9 @@ fun ConnectionsScreen(
                 scope.launch {
                     val request = pendingPcLogin
                     val approval = request?.let { PairingApi.approveLoginRequest(it.requestId, it.challenge) }
+                    if (approval?.ok == true) {
+                        InstallationRepository.markPcPaired(context)
+                    }
                     approvingPcLogin = false
                     pendingPcLogin = null
                     showSnackbar(
@@ -197,6 +201,7 @@ fun ConnectionsScreen(
         SectionLabel(stringResource(R.string.connections_my_pc), stringResource(R.string.connections_my_pc_subtitle))
         PcConnectionCard(
             enabled = registered,
+            pairingState = installState.pcPairingState,
             onConnect = { scannerLauncher.launch(Intent(context, QrScannerActivity::class.java)) },
         )
         GitHubConnectionCard(
@@ -280,10 +285,10 @@ private fun AiAgentCards(
     onSelect: (ToolSpec) -> Unit,
 ) {
     val specs = listOf(
-        ToolSpec("codex", "OpenAI Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), "pigeonhub setup codex", brandIconRes = R.drawable.ic_agent_codex),
-        ToolSpec("claude", "Claude Code", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), "pigeonhub setup claude", brandIconRes = R.drawable.ic_agent_claude),
-        ToolSpec("grok", "Grok Build", stringResource(R.string.tool_grok_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_grok_detail), "pigeonhub setup grok", brandIconRes = R.drawable.ic_agent_grok),
-        ToolSpec("zcode", "ZCode · GLM", stringResource(R.string.tool_zcode_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.SmartToy, stringResource(R.string.tool_zcode_detail), "pigeonhub setup zcode", brandIconRes = R.drawable.ic_agent_zcode),
+        ToolSpec("codex", "OpenAI Codex", stringResource(R.string.tool_codex_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Code, stringResource(R.string.tool_codex_detail), brandIconRes = R.drawable.ic_agent_codex),
+        ToolSpec("claude", "Claude Code", stringResource(R.string.tool_claude_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.Psychology, stringResource(R.string.tool_claude_detail), brandIconRes = R.drawable.ic_agent_claude),
+        ToolSpec("grok", "Grok Build", stringResource(R.string.tool_grok_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.AutoAwesome, stringResource(R.string.tool_grok_detail), brandIconRes = R.drawable.ic_agent_grok),
+        ToolSpec("zcode", "ZCode · GLM", stringResource(R.string.tool_zcode_description), stringResource(R.string.tool_status_supported), stringResource(R.string.tool_action_setup), Icons.Outlined.SmartToy, stringResource(R.string.tool_zcode_detail), brandIconRes = R.drawable.ic_agent_zcode),
     )
     // MVP-019 copy audit: each agent card reports its OWN source's health.
     // A card whose agent never emitted an event shows no health line at all —
@@ -405,12 +410,21 @@ private fun ToolDetailScreen(tool: ToolSpec, showSnackbar: (String) -> Unit, onB
                 if (actionBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 else Text(if (tool.status == stringResource(R.string.tool_status_connected)) stringResource(R.string.tool_action_manage) else stringResource(R.string.tool_action_connect))
             }
-        } else if (tool.command != null) {
+        } else if (tool.id in setOf("codex", "claude", "grok", "zcode")) {
             Text(stringResource(R.string.tool_usage_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            // BETA-003A: pairing consent drives setup; the phone never asks for a manual command.
             Text(
-                stringResource(if (tool.id in setOf("codex", "claude", "grok", "zcode")) R.string.tool_agent_usage_steps else R.string.tool_usage_steps),
+                stringResource(R.string.agent_setup_on_pc_note, tool.title),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.tool_agent_usage_steps),
                 style = MaterialTheme.typography.bodyMedium,
             )
+        } else if (tool.command != null) {
+            Text(stringResource(R.string.tool_usage_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.tool_usage_steps), style = MaterialTheme.typography.bodyMedium)
             SelectionContainer { Text(tool.command, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
             FilledTonalButton(onClick = { clipboard.setText(AnnotatedString(tool.command)); showSnackbar(copiedMessage) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.tool_copy_command)) }
         }
@@ -423,7 +437,7 @@ private fun TextButtonLike(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PcConnectionCard(enabled: Boolean, onConnect: () -> Unit) {
+private fun PcConnectionCard(enabled: Boolean, pairingState: PcPairingState, onConnect: () -> Unit) {
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             CardHeader(
@@ -432,8 +446,17 @@ private fun PcConnectionCard(enabled: Boolean, onConnect: () -> Unit) {
                 tagline = stringResource(R.string.cli_connection_tagline),
             )
             Text(stringResource(R.string.cli_connection_body), style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = onConnect, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text(stringResource(R.string.cli_connection_action))
+            when (pairingState) {
+                PcPairingState.PAIRED -> StatusPill(stringResource(R.string.pairing_pc_connected), true)
+                PcPairingState.STALE -> {
+                    StatusPill(stringResource(R.string.pairing_pc_stale), false)
+                    Button(onClick = onConnect, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.pairing_pc_reconnect))
+                    }
+                }
+                PcPairingState.NOT_PAIRED -> Button(onClick = onConnect, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.cli_connection_action))
+                }
             }
         }
     }

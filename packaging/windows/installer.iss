@@ -1,32 +1,35 @@
-; PigeonHub CLI — per-user Windows installer (MVP-018).
+; PigeonHub CLI — per-user Windows installer (MVP-018; BETA-003 onboarding UX).
 ; Build: ISCC installer.iss /DAPP_VERSION=x.y.z
 ; Design decisions (see docs/reports/mvp0175-mvp018-overnight/WINDOWS-PACKAGING.md):
 ;   - per-user, no admin required (installs under %LOCALAPPDATA%\Programs)
 ;   - adds the install dir to the USER Path only, preserving all other entries
 ;   - uninstall removes the binary + Path entry but never touches
 ;     %USERPROFILE%\.pigeonhub (credentials live only through `pigeonhub logout`)
+;   - BETA-003: "Set up PigeonHub now" on the Finish page launches the Setup
+;     Center (fresh installs only) + a Start Menu shortcut; never auto-starts
+;     on upgrades.
 
 #define AppName "PigeonHub"
 #define AppExeName "pigeonhub.exe"
 #ifndef APP_VERSION
 #define APP_VERSION "0.0.0-dev"
 #endif
+#define UninstallKey "{7C1F6A4E-52B0-4B1E-9F3A-6B1E5A2C9D44}_is1"
 
 [Setup]
 AppId={{7C1F6A4E-52B0-4B1E-9F3A-6B1E5A2C9D44}
-AppName={#AppName} CLI
+AppName={#AppName}
 AppVersion={#APP_VERSION}
-AppVerName={#AppName} CLI {#APP_VERSION}
+AppVerName={#AppName} {#APP_VERSION}
 DefaultDirName={autopf}\{#AppName}
 PrivilegesRequired=lowest
 DisableWelcomePage=yes
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=yes
-; no Start Menu icons: this is a CLI; only the uninstall entry is created
 CreateUninstallRegKey=yes
 Uninstallable=yes
-UninstallDisplayName={#AppName} CLI
+UninstallDisplayName={#AppName}
 OutputDir=installer
 OutputBaseFilename=PigeonHub-Setup-{#APP_VERSION}
 Compression=lzma2
@@ -37,10 +40,20 @@ CloseApplications=no
 [Files]
 Source: "dist\pigeonhub.exe"; DestDir: "{app}"; Flags: ignoreversion
 
+[Icons]
+Name: "{autoprograms}\PigeonHub Setup"; Filename: "{app}\{#AppExeName}"; Parameters: "onboard"; Comment: "Connect your phone and tools to PigeonHub"
+Name: "{autodesktop}\PigeonHub Setup"; Filename: "{app}\{#AppExeName}"; Parameters: "onboard"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a &desktop shortcut for PigeonHub Setup"; Flags: unchecked
+
+[Run]
+Filename: "{app}\{#AppExeName}"; Parameters: "onboard"; Flags: postinstall nowait skipifsilent runasoriginaluser; Description: "Set up PigeonHub now"; Check: FreshInstall
+
 [Messages]
 SelectDirDesc=Where should PigeonHub be installed?
-FinishedLabelNoIcons=PigeonHub is installed.%n%nNext:%nOpen a NEW PowerShell window and run:%n%n    pigeonhub login%n%nThen send your first job:%n%n    pigeonhub run --name "My job" -- <your command>
-FinishedLabel=PigeonHub is installed.%n%nNext:%nOpen a NEW PowerShell window and run:%n%n    pigeonhub login%n%nThen send your first job:%n%n    pigeonhub run --name "My job" -- <your command>
+FinishedLabelNoIcons=PigeonHub is installed.%n%nClick Finish to open the PigeonHub Setup Center and connect your phone — no terminal needed.%n%nPrefer the terminal? Open a NEW PowerShell window and run:%n%n    pigeonhub login
+FinishedLabel=PigeonHub is installed.%n%nClick Finish to open the PigeonHub Setup Center and connect your phone — no terminal needed.%n%nPrefer the terminal? Open a NEW PowerShell window and run:%n%n    pigeonhub login
 
 [Code]
 const
@@ -63,6 +76,14 @@ begin
     SendMessageTimeoutWU(HWND_BROADCAST, WM_SETTINGCHANGE, 0, 'Environment', SMTO_ABORTIFHUNG, 1000, Msg)
   else
     SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, 'Environment', SMTO_ABORTIFHUNG, 1000, Msg);
+end;
+
+{ True on a first-time install; upgrades never auto-launch the Setup Center. }
+{ Detected via the existing uninstall key (WizardIsUpgrade is not in all IS6 builds). }
+function FreshInstall: Boolean;
+begin
+  Result := not RegKeyExists(HKEY_CURRENT_USER,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#UninstallKey}');
 end;
 
 { True when the user Path already contains AppDir as an exact segment. }

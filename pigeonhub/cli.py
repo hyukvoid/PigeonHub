@@ -19,6 +19,13 @@ from .core import (
     status,
 )
 from .agents import AGENTS, build_setup_plan, apply_setup, handle_agent_event, remove_setup, setup_summary
+from .codex_integration import handle_codex_notify
+
+
+AUTO_CONNECT_DISCLOSURE = (
+    "연결된 개발 도구도 자동으로 설정 / PigeonHub가 설치된 Codex, ZCode 등의 "
+    "작업 완료 알림을 연결할 수 있습니다."
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     login_parser.add_argument("--code", help="one-time pairing code")
     login_parser.add_argument("--qr-image", help="screenshot/photo of the Android pairing QR")
     login_parser.add_argument("--worker-url", help="PigeonHub worker origin")
+    login_parser.add_argument("--no-auto-connect", action="store_true", help="do not connect supported local tools after pairing")
 
     pair_parser = sub.add_parser("pair", help=argparse.SUPPRESS)
     pair_parser.add_argument("--code", help=argparse.SUPPRESS)
@@ -89,9 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.add_argument("--yes", action="store_true", help="confirm the printed change preview")
     setup_parser.add_argument("--json", action="store_true", help="print a machine-readable preview/result")
 
+    sub.add_parser("onboard", help="open the local Setup Center (connect phone and tools in the browser)")
+
     event_parser = sub.add_parser("agent-event", help=argparse.SUPPRESS)
     event_parser.add_argument("agent", choices=AGENTS)
     event_parser.add_argument("--job-name")
+
+    notify_callback_parser = sub.add_parser("internal-codex-notify", help=argparse.SUPPRESS)
+    notify_callback_parser.add_argument("payload", nargs="?", help=argparse.SUPPRESS)
 
     sub.add_parser("comfyui-demo", help=argparse.SUPPRESS)
     return parser
@@ -246,6 +259,60 @@ def _print_first_run() -> None:
     print("  pigeonhub --help      all commands")
 
 
+def _pairing_auto_connect_consent(disabled: bool) -> bool:
+    """Show the one-time pairing disclosure before enabling local setup."""
+    if disabled:
+        return False
+    print(AUTO_CONNECT_DISCLOSURE)
+    if not sys.stdin.isatty():
+        return True
+    try:
+        answer = input("지원되는 도구 자동 연결 [Y/n]: ").strip().lower()
+    except EOFError:
+        return False
+    return answer not in {"n", "no"}
+
+
+def _run_onboard() -> int:
+    """Ephemeral Setup Center: loopback server + browser; dies with the session."""
+    import os
+    import webbrowser
+
+    from .onboard import SESSION_TTL_SECONDS, serve
+
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            ctypes.windll.user32.ShowWindow(
+                ctypes.windll.kernel32.GetConsoleWindow(), 6  # SW_MINIMIZE
+            )
+        except Exception:
+            pass
+    center, url = serve()
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+    print("PigeonHub Setup Center is open in your browser.")
+    print("Keep this window open until you finish; closing it (or finishing in the")
+    print(f"browser) ends setup. The session expires after {SESSION_TTL_SECONDS // 60} minutes.")
+    print()
+    print("Advanced CLI remains available: pigeonhub login / pigeonhub setup <agent>")
+    try:
+        center.server.serve_forever()  # type: ignore[union-attr]
+    except KeyboardInterrupt:
+        pass
+    finally:
+        center.state.stop.set()
+        try:
+            center.server.server_close()  # type: ignore[union-attr]
+        except Exception:
+            pass
+    print("Setup Center closed.")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -264,7 +331,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         if args.subcommand in ("login", "pair"):
-            login(code=args.code, qr_image=args.qr_image, worker_url=args.worker_url, legacy=args.subcommand == "pair")
+            auto_connect = False if args.subcommand == "pair" else _pairing_auto_connect_consent(args.no_auto_connect)
+            login(
+                code=args.code,
+                qr_image=args.qr_image,
+                worker_url=args.worker_url,
+                legacy=args.subcommand == "pair",
+                auto_connect=auto_connect,
+            )
             return 0
         if args.subcommand == "logout":
             logout()
@@ -290,6 +364,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _recipe_command(args)
         if args.subcommand == "agent-event":
             return handle_agent_event(args.agent, job_name=args.job_name)
+        if args.subcommand == "internal-codex-notify":
+            return handle_codex_notify(args.payload)
         if args.subcommand == "setup":
             plan = build_setup_plan(args.agent, remove=args.remove)
             summary = setup_summary(plan)
@@ -330,6 +406,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 print(f"Applied. Backup: {backup}" if backup else "Applied. No backup was needed for a new file.")
             return 0
+        if args.subcommand == "onboard":
+            return _run_onboard()
         if args.subcommand == "comfyui-demo":
             return comfyui_demo()
     except CliError as exc:

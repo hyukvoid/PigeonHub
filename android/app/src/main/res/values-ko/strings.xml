@@ -173,9 +173,9 @@
     <string name="tool_usage_steps">1. PC에서 pigeonhub login을 한 번 실행하고 PigeonHub 앱에서 연결합니다.
 2. 실행할 명령을 pigeonhub run 뒤에 넣습니다.
 3. 작업을 실행하면 진행·완료·실패를 알려드려요.</string>
-    <string name="tool_agent_usage_steps">1. PC에서 pigeonhub setup &lt;agent&gt;를 한 번 실행하고 변경 미리보기를 확인하세요.
+    <string name="tool_agent_usage_steps">1. PC의 PigeonHub Setup에서 자동 연결 동의를 확인하고 휴대폰에서 페어링을 승인하세요.
 2. 평소처럼 에이전트를 사용하세요.
-3. PigeonHub가 라이프사이클을 알려드리며 프롬프트와 소스 파일은 전송하지 않아요.</string>
+3. 완료 알림만 연결하며 프롬프트·소스·도구 입력은 전송하지 않아요.</string>
     <string name="tool_copy_command">예시 복사</string>
     <string name="comfyui_setup_steps">PC에서 pigeonhub login을 실행한 뒤 PigeonHub가 보여주는 1회용 코드를 입력하거나 스캔하세요. PC에서 확인을 마쳐야 연결이 완료돼요.</string>
     <string name="pairing_scan_title">이 PC를 연결할까요?</string>
@@ -189,6 +189,10 @@
     <string name="pairing_expired_qr">QR 코드가 만료되었습니다. PC에서 `pigeonhub login`을 다시 실행해주세요.</string>
     <string name="pairing_pc_connected">PC가 연결됐어요</string>
     <string name="pairing_pc_connect_failed">PC를 연결하지 못했어요</string>
+    <string name="pairing_pc_stale">PC 연결을 새로 고쳐야 해요</string>
+    <string name="pairing_pc_reconnect">PC 다시 연결</string>
+    <string name="agent_setup_on_pc_note">%1$s 자동 연결은 PC의 PigeonHub Setup과 휴대폰 페어링으로 설정돼요.</string>
+    <string name="common_got_it">확인</string>
     <string name="tool_comfyui_description">이미지·영상 생성 작업의 진행과 완료를 알려드려요.</string>
     <string name="tool_comfyui_detail">ComfyUI는 실제 워크플로 연결을 지원해요. PigeonHub가 연결 상태를 표시하고 워크플로 진행과 완료를 작업 수신함에 알려드려요.</string>
     <string name="tool_claude_description">Claude 작업이 끝나거나 확인이 필요할 때 알려드려요.</string>

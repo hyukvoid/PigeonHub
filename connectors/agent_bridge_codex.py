@@ -14,6 +14,7 @@ terminal event itself from the process exit code.
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -65,9 +66,14 @@ def main():
     if args.model:
         cmd += ["-m", args.model]
     cmd.append(args.task)
+    child_env = os.environ.copy()
+    # The bridge owns the complete Codex lifecycle.  If a user's Codex config
+    # also has PigeonHub notify, the callback must not emit a second card.
+    child_env["PIGEONHUB_CODEX_BRIDGED"] = "1"
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+        env=child_env,
     )
     assert proc.stdout is not None
     for line in proc.stdout:

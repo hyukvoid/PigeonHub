@@ -1,59 +1,75 @@
-# RESUME — BETA-002 Private Beta Readiness (2026-09-19)
+# RESUME — BETA-003 Onboarding UX + Kaggle draw variants (2026-09-19)
 
-Branch: `autonomous/beta002-private-beta-readiness-20260919` (base `9b053d9`).
-Lineage: MVP-019.1 → BETA-001A (`a0c0cf3`) → BETA-001B (`9b053d9`) → BETA-002
-(HEAD commit).
+Branch: `autonomous/beta003-onboarding-ux-20260919` (base: BETA-002 HEAD
+`9076e88`). Lineage: MVP-019.1 → BETA-001A (`a0c0cf3`) → BETA-001B
+(`9b053d9`) → BETA-002 (`9076e88`) → BETA-003 (HEAD commit).
 
 ## State (source of truth)
 
-- **RC**: Windows CLI **0.19.0-beta.2** (`pigeonhub/__init__.py`), Android
-  unchanged at `versionCode 2 / 0.2.0-beta001`. Verdict:
-  **CONDITIONAL_PRIVATE_BETA_READY** — the one condition is the owner's
-  real-Galaxy pairing pass.
-- **Codex regression root-caused and closed** (`CODEX-COMPAT.md`): exec mode
-  on codex-cli 0.152.1 does NOT execute hooks.json hooks (marker experiment,
-  twice); hooks remain the interactive path. The official exec-mode route is
-  the `codex exec --json` bridge — hardened (`lifecycle_from_line` drops item
-  text/usage structurally), pinned by sanitized fixtures
-  (`tests/test_pigeonhub_codex_compat.py`), and verified live: recipe →
-  bridge → real Codex produced RUNNING→PROGRESS×2→DONE on ONE card.
-- **Fresh-user track** (`FRESH-INSTALL-QA.md`): clean no-Python PATH →
-  install → `where/version` → first-run → `status` (copy now "Connected /
-  Server: reachable") → packaged `login` full flow → first job
-  (`ping -n 6 127.0.0.1`) RUNNING→DONE. Android: clean-install onboarding
-  captured in KO and EN.
-- **Negative paths**: two new tests (terminal-publish connection drop with
-  same-key retry ★, dead-pairing recovery guidance ★) on top of the existing
-  outage/corruption/missing-executable/idempotency coverage. Uninstall →
-  reinstall on the real install: binary+PATH removed, `~/.pigeonhub` fully
-  preserved, reinstall restores everything.
-- **Beta bundle**: `dist/beta-bundle/` — exe, installer, release APK,
-  QUICKSTART.md, KNOWN-ISSUES.md, SHA256SUMS.txt (verified 5/5; Defender 0
-  threats). QUICKSTART uses OS-native commands only; Recipe is optional.
-- **Dogfood harness**: `docs/dogfood/DOGFOOD-TEMPLATE.md` + DOGFOOD-PLAN.md —
-  5–7 days, 20+ real jobs, privacy rules (safe labels only), no analytics.
-- Regression: Python **63/63**, worker typecheck clean, Android unit +
-  assembleDebug + assembleRelease successful, `git diff --check` and secret
-  scan clean.
+### BETA-003 — One-click onboarding (`docs/reports/beta003-onboarding-ux/`)
 
-## Owner actions (in order — max 5)
+- **Ephemeral Setup Center**: `pigeonhub onboard` → `127.0.0.1` random port +
+  browser page (Welcome → Connect phone → Connect tools → Test → Done),
+  KO/EN, dies with the session. No daemon/tray/service.
+- **Security**: session-token gate (invalid/expired = 404), POST-only
+  mutations with same-origin + `confirm`, fixed action allowlist (no command
+  execution path), poll secret/token/config never serialized or logged.
+  `tests/test_pigeonhub_onboard.py` — 16 tests.
+- **Engine reuse**: QR pairing = MVP-016 protocol (in-page QR PNG, poller
+  state machine); agent connect/remove = the existing `pigeonhub setup`
+  engine (preview/backup/atomic/verify); test notification = `publish_message`.
+- **Installer**: Finish page "Set up PigeonHub now" (fresh installs only —
+  uninstall-key check; upgrades never auto-launch), Start Menu "PigeonHub
+  Setup" shortcut, optional desktop icon. Console window minimized, closing
+  it = cancel.
+- **Android**: agent details now guide "이 도구는 PC에서 설정해요…" (KO/EN);
+  no remote execution, no config mutation.
+- **RC**: CLI **0.20.0-beta.1**; Android `versionCode 3 / 0.3.0-beta003`.
+  Regression: Python 90/90, Android unit + assembleDebug/Release OK,
+  Defender 0 threats, secret scan/diff-check clean. Packaged onboard smoke:
+  `127.0.0.1:51283 LISTENING`, tokenless `/setup` → 404, process kill = server
+  gone.
 
-1. Galaxy real pairing (6 steps): APK 0.2.0-beta001 + installer →
-   `pigeonhub login` → 연결 → PC 연결 → scan → 승인 → test job. Checklist:
-   `docs/reports/beta002-private-beta-readiness/PRIVATE-BETA-CHECKLIST.md`.
-2. AFTER the test job succeeds: revoke the old test-minted connector token
-   (exact command in `docs/reports/mvp0175-mvp018-overnight/SECURITY.md`).
-3. Run the 5–7 day dogfood with the journal; file P0/P1 immediately.
-4. Optional, pre-beta: trust Codex hooks via `/hooks` (interactive only);
-   Claude quota if Claude E2E wanted.
-5. Code signing before broad distribution (post-beta).
+### Kaggle — final two submissions (approved, both used; NO more)
+
+Same validated S44 pipeline (architecture/features/hyperparameters/blend
+untouched), only the PU draw changed; cached artifacts reused; frozen S44
+file untouched.
+
+| Submission | ref | Public | Δ vs 0.73649 |
+|---|---|---|---|
+| S44_PRESSURE_run01 (S33 draw) | 56347081 | **0.74147** | **+0.00498** — new champion |
+| S44_PRESSURE_run02 (S32 draw) | 56347895 | 0.73893 | +0.00244 |
+
+- run01 was already submitted by the earlier session before this one started;
+  it was recorded, not re-submitted. run02 was built
+  (`src/s50_pressure_runs.py`), validated 9/9
+  (`src/validate_submission.py`), diffed against S44/run01 (risk deltas,
+  300+ behavior-diff rows, ~100k evidence-diff cells, distinct hashes), then
+  submitted. Note: the leaderboard also shows an extra run02 entry at
+  04:03 UTC with the identical file/message (duplicate quota burn, same
+  score) — cause unknown (likely an earlier session's retry); 2 submissions
+  remain today. **No further submissions.**
+- Draw-stability verdict: S44 + pressure holds on all three PU draws
+  (0.74147 / 0.73893 / 0.73649) — the gain is not a draw artifact.
+  Frozen S44 artifacts were never modified.
+
+## Owner actions / next steps
+
+1. Real-Galaxy pass (BETA-002 checklist): new APK 0.3.0-beta003 + installer
+   → Setup Center or `pigeonhub login` → scan → approve → test job; then
+   revoke the old test token (exact command in MVP-017.5 SECURITY.md).
+2. Spot-check the Setup Center at 125/150% Windows scaling and, with a real
+   phone, time the full install→pair→connect→test loop (~3 min target).
+3. 5–7 day dogfood with `docs/dogfood/DOGFOOD-TEMPLATE.md` (20+ real jobs).
+4. Then 3–5 person private beta using `dist/beta-bundle/` (refresh the bundle
+   with the 0.20.0-beta.1 artifacts).
 
 ## Environment notes
 
-- `PigeonHub-E2E-API36` AVD hangs on snapshot load — use
-  `Medium_Phone_API_36.1` (cold boot `-no-snapshot`).
-- Windows Sandbox unavailable on this machine (non-admin, feature off) —
-  fresh-user testing used a Python-free PATH + fresh shell + installed exe.
-- `git stash@{0}` still holds the old Galaxy `ui.xml` dump (pop or drop).
-- Untracked leftovers from QA: `dist/beta-bundle/` (distribution area, not
-  committed), `fr-login-*.txt` in the repo root (delete freely).
+- Inno Setup: `WizardIsUpgrade` unavailable in this IS6 build (use the
+  uninstall-key check); `{#SetupSetting("AppId")}` inside string literals
+  does not preprocess — use an explicit `#define` (done in installer.iss).
+- `PigeonHub-E2E-API36` AVD still hangs on snapshots; use
+  `Medium_Phone_API_36.1` with `-no-snapshot`.
+- `git stash@{0}` (old Galaxy ui.xml dump) still stashed.

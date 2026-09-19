@@ -184,9 +184,9 @@
     <string name="tool_usage_steps">1. Run pigeonhub login once and connect this PC in the PigeonHub app.
 2. Put your command after pigeonhub run.
 3. Leave the work running — PigeonHub reports progress, completion, or failure.</string>
-    <string name="tool_agent_usage_steps">1. Run pigeonhub setup &lt;agent&gt; once on your PC and confirm the preview.
+    <string name="tool_agent_usage_steps">1. Confirm auto-connect in PigeonHub Setup on your PC and approve pairing on your phone.
 2. Keep using the agent normally.
-3. PigeonHub reports lifecycle updates; prompts and source files are never sent.</string>
+3. Only completion notifications are connected; prompts, source files, and tool input are never sent.</string>
     <string name="tool_copy_command">Copy example</string>
     <string name="comfyui_setup_steps">On your PC, run pigeonhub login, then enter or scan the one-time code shown by PigeonHub. The connection is complete only after the PC confirms it.</string>
     <string name="pairing_scan_title">Connect this PC?</string>
@@ -200,6 +200,10 @@
     <string name="pairing_expired_qr">The QR code has expired. Run `pigeonhub login` on your PC again.</string>
     <string name="pairing_pc_connected">PC connected</string>
     <string name="pairing_pc_connect_failed">Unable to connect this PC</string>
+    <string name="pairing_pc_stale">This PC needs to be connected again</string>
+    <string name="pairing_pc_reconnect">Reconnect PC</string>
+    <string name="agent_setup_on_pc_note">%1$s auto-connect is configured through PigeonHub Setup on your PC and phone pairing.</string>
+    <string name="common_got_it">Got it</string>
     <string name="tool_comfyui_description">Get notified when your image or video workflow progresses or finishes.</string>
     <string name="tool_comfyui_detail">ComfyUI has a real workflow connection. PigeonHub keeps its connection health here and turns workflow progress and completion into Job Inbox updates.</string>
     <string name="tool_claude_description">Get notified when a Claude task finishes or needs your attention.</string>
