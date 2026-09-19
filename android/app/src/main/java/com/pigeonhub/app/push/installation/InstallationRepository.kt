@@ -33,6 +33,17 @@ enum class BootstrapStatus {
     RECOVERY_REQUIRED,
 }
 
+enum class PcPairingState {
+    NOT_PAIRED,
+    PAIRED,
+    STALE,
+}
+
+/** Stored-value → state; unknown or missing values never fabricate a pairing. */
+fun pcPairingStateFrom(raw: String?): PcPairingState =
+    runCatching { PcPairingState.valueOf(raw ?: PcPairingState.NOT_PAIRED.name) }
+        .getOrDefault(PcPairingState.NOT_PAIRED)
+
 data class InstallationState(
     val status: BootstrapStatus = BootstrapStatus.UNINITIALIZED,
     val installationId: String? = null,
@@ -40,6 +51,7 @@ data class InstallationState(
     val endpoint: String? = null,
     val writeTokenVersion: Int = 0,
     val fcmTokenVersion: Int = 0,
+    val pcPairingState: PcPairingState = PcPairingState.NOT_PAIRED,
     val lastError: String? = null,
     val busy: Boolean = false,
 )
@@ -62,6 +74,7 @@ object InstallationRepository {
     private const val KEY_ENDPOINT = "channel_endpoint"
     private const val KEY_WRITE_TOKEN_VERSION = "write_token_version"
     private const val KEY_FCM_TOKEN_VERSION = "fcm_token_version"
+    private const val KEY_PC_PAIRING_STATE = "pc_pairing_state"
     private const val KEY_LAST_INVITE = "last_invite_code"
     private const val KEY_LAST_FCM = "last_fcm_token"
 
@@ -140,6 +153,7 @@ object InstallationRepository {
             endpoint = prefs[stringPreferencesKey(KEY_ENDPOINT)],
             writeTokenVersion = prefs[stringPreferencesKey(KEY_WRITE_TOKEN_VERSION)]?.toIntOrNull() ?: 0,
             fcmTokenVersion = prefs[stringPreferencesKey(KEY_FCM_TOKEN_VERSION)]?.toIntOrNull() ?: 0,
+            pcPairingState = pcPairingStateFrom(prefs[stringPreferencesKey(KEY_PC_PAIRING_STATE)]),
         )
         currentCredentials = credentials
         mutableState.value = restored
@@ -153,6 +167,18 @@ object InstallationRepository {
     fun currentCredentialsForApi(): CredentialVault.Credentials? = currentCredentials
 
     fun workerOrigin(): String = WORKER_ORIGIN
+
+    /** Persist the successful PC-first approval and refresh the UI immediately. */
+    suspend fun markPcPaired(context: Context) = mutex.withLock {
+        context.dataStore.edit { prefs -> prefs[stringPreferencesKey(KEY_PC_PAIRING_STATE)] = PcPairingState.PAIRED.name }
+        mutableState.value = mutableState.value.copy(pcPairingState = PcPairingState.PAIRED)
+    }
+
+    /** Reserved for a future live connector-health check; never guessed from a QR error. */
+    suspend fun markPcPairingStale(context: Context) = mutex.withLock {
+        context.dataStore.edit { prefs -> prefs[stringPreferencesKey(KEY_PC_PAIRING_STATE)] = PcPairingState.STALE.name }
+        mutableState.value = mutableState.value.copy(pcPairingState = PcPairingState.STALE)
+    }
 
     /** message_id of the most recent user-facing test notification (delivery tracking). */
     @Volatile

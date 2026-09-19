@@ -19,8 +19,8 @@ android {
         applicationId = "com.pigeonhub.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0-beta003"
+        versionCode = 4
+        versionName = "0.3.0-beta003a"
     }
 
     buildTypes {
