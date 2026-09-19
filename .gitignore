@@ -84,3 +84,6 @@ ui.xml
 /packaging/windows/installer/
 *.egg-info/
 packaging/windows/pigeonhub.spec
+
+# ---- Android Kotlin session artifacts (BETA-003A) ----
+android/.kotlin/

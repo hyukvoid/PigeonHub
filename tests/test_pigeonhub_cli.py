@@ -261,6 +261,18 @@ class CliCoreTests(unittest.TestCase):
         self.assertTrue(marker.exists())
         self.assertEqual([event["state"] for event in self._events()], ["RUNNING", "DONE"])
 
+    def test_codex_wrapper_does_not_publish_command_or_prompt(self):
+        if os.name != "nt":
+            self.skipTest("Windows command shim behavior")
+        secret = "PRIVATE_PROMPT_MARKER_XYZ"
+        shim = Path(self.temp.name) / "fake-codex.cmd"
+        shim.write_text("@echo off\r\nexit /b 0\r\n", encoding="utf-8")
+        result = core.run_job([str(shim), "exec", secret], name=None)
+        self.assertEqual(result, 0)
+        events = self._events()
+        self.assertEqual(events[0]["job_name"], "Codex session")
+        self.assertNotIn(secret, json.dumps(_Handler.requests))
+
     def test_progress_uses_same_lifecycle_job_id(self):
         command = [
             sys.executable,
@@ -290,6 +302,18 @@ class CliCoreTests(unittest.TestCase):
         self.assertTrue(value["worker_reachable"])
         self.assertTrue(core.logout())
         self.assertFalse(self.credentials.exists())
+
+    def test_auto_connect_failure_does_not_rollback_saved_pairing(self):
+        body = {
+            "endpoint": self.endpoint,
+            "write_token": "pct_auto",
+            "channel_id": "ch_auto",
+        }
+        with patch("pigeonhub.codex_integration.connect_codex", side_effect=RuntimeError("injected")):
+            self.assertEqual(core._save_redeemed_login(body, auto_connect=True), self.credentials)
+        saved = json.loads(self.credentials.read_text(encoding="utf-8"))
+        self.assertEqual(saved["write_token"], "pct_auto")
+        self.assertEqual(saved["channel_id"], "ch_auto")
 
     def test_pc_first_login_displays_request_and_polls_after_approval(self):
         self.credentials.unlink()

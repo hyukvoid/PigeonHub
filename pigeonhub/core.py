@@ -376,7 +376,7 @@ def _print_waiting(deadline: float) -> None:
         _print_waiting._last = time.time()  # type: ignore[attr-defined]
 
 
-def _save_redeemed_login(body: Mapping[str, Any]) -> Path:
+def _save_redeemed_login(body: Mapping[str, Any], *, auto_connect: bool = False) -> Path:
     required = ("endpoint", "write_token", "channel_id")
     if not all(body.get(key) for key in required):
         raise CliError("Login response did not contain a complete connector credential")
@@ -389,10 +389,29 @@ def _save_redeemed_login(body: Mapping[str, Any]) -> Path:
         }
     )
     print(f"Logged in to channel {body['channel_id'][:12]}... - credentials saved to {path}")
+    if auto_connect:
+        # Pairing is already durable.  Tool setup is best-effort and can never
+        # turn a successful phone approval into a failed login.
+        try:
+            from .codex_integration import CONNECTED_BASIC, NEEDS_ATTENTION, connect_codex
+
+            result = connect_codex()
+            if result.status == CONNECTED_BASIC:
+                print("Codex: connected (completion notifications)")
+            elif result.status == NEEDS_ATTENTION:
+                print("Codex: needs attention; pairing is complete and was not rolled back.", file=sys.stderr)
+        except Exception:
+            print("Codex: automatic connection was not completed; pairing is complete.", file=sys.stderr)
     return path
 
 
-def _legacy_login(*, code: str | None = None, qr_image: str | None = None, worker_url: str | None = None) -> Path:
+def _legacy_login(
+    *,
+    code: str | None = None,
+    qr_image: str | None = None,
+    worker_url: str | None = None,
+    auto_connect: bool = False,
+) -> Path:
     if qr_image:
         code = read_pairing_code_from_image(qr_image)
         if not code:
@@ -407,10 +426,10 @@ def _legacy_login(*, code: str | None = None, qr_image: str | None = None, worke
     status, body = http_json(f"{base}/v1/pairing/redeem", {"code": code})
     if status != 200 or not body.get("ok"):
         raise CliError(f"Login failed: {body.get('error', status or 'network error')}")
-    return _save_redeemed_login(body)
+    return _save_redeemed_login(body, auto_connect=auto_connect)
 
 
-def _qr_login(*, worker_url: str | None = None) -> Path:
+def _qr_login(*, worker_url: str | None = None, auto_connect: bool = False) -> Path:
     base = (worker_url or os.environ.get("PIGEONHUB_WORKER_URL") or DEFAULT_WORKER_URL).rstrip("/")
     status, body = http_json(f"{base}/v1/pairing/requests", {})
     if status != 200 or not body.get("ok"):
@@ -462,7 +481,7 @@ def _qr_login(*, worker_url: str | None = None) -> Path:
                 if poll_status == 200 and poll_body.get("status") == "approved":
                     if sys.stdout.isatty():
                         sys.stdout.write("\n")
-                    return _save_redeemed_login(poll_body)
+                    return _save_redeemed_login(poll_body, auto_connect=auto_connect)
                 if sys.stdout.isatty():
                     sys.stdout.write("\n")
                 raise CliError(f"PC login failed: {poll_body.get('error', poll_status or 'network error')}")
@@ -476,10 +495,17 @@ def _qr_login(*, worker_url: str | None = None) -> Path:
             _remove_temp_qr(qr_image)
 
 
-def login(*, code: str | None = None, qr_image: str | None = None, worker_url: str | None = None, legacy: bool = False) -> Path:
+def login(
+    *,
+    code: str | None = None,
+    qr_image: str | None = None,
+    worker_url: str | None = None,
+    legacy: bool = False,
+    auto_connect: bool = False,
+) -> Path:
     if code or qr_image or legacy:
-        return _legacy_login(code=code, qr_image=qr_image, worker_url=worker_url)
-    return _qr_login(worker_url=worker_url)
+        return _legacy_login(code=code, qr_image=qr_image, worker_url=worker_url, auto_connect=auto_connect)
+    return _qr_login(worker_url=worker_url, auto_connect=auto_connect)
 
 
 def logout() -> bool:
@@ -594,10 +620,21 @@ def _resolve_windows_command(command: Sequence[str]) -> Sequence[str]:
     return command
 
 
+def _is_codex_command(command: Sequence[str]) -> bool:
+    if not command:
+        return False
+    executable = Path(str(command[0])).stem.lower()
+    return executable in {"codex", "codex-cli"} or executable.endswith("-codex")
+
+
 def run_job(command: Sequence[str], *, name: str | None = None, source: str = "cli", message: str | None = None) -> int:
     if not command:
         raise CliError("A command is required. Example: pigeonhub run python crawler.py")
-    job_name = name or " ".join(command)
+    codex_command = _is_codex_command(command)
+    # A native Codex notify callback and the wrapper can coexist on the same
+    # machine. Keep the wrapper's lifecycle ownership, and never put the
+    # Codex argv (which may contain a prompt) in the default card or message.
+    job_name = name or ("Codex session" if codex_command else " ".join(command))
     job_id = f"{source}-{uuid.uuid4().hex}"
     started = _now()
     state_path = default_state_path()
@@ -614,7 +651,7 @@ def run_job(command: Sequence[str], *, name: str | None = None, source: str = "c
             title=f"{job_name}: started",
             # BETA-001B: recipes never transmit their command/prompt to the
             # worker, so they pass an explicit safe message here.
-            message=" ".join(command) if message is None else message,
+            message=("Codex session started" if codex_command else (" ".join(command) if message is None else message)),
         )
     except CliError as exc:
         running = None
@@ -643,6 +680,10 @@ def run_job(command: Sequence[str], *, name: str | None = None, source: str = "c
             "PIGEONHUB_STATE": str(state_path),
         }
     )
+    # A wrapper-owned Codex run already has RUNNING/DONE lifecycle ownership.
+    # The native notify callback must not create a second terminal card.
+    if codex_command:
+        child_env["PIGEONHUB_CODEX_BRIDGED"] = "1"
     try:
         process = subprocess.Popen(_resolve_windows_command(list(command)), env=child_env)
         exit_code = process.wait()
