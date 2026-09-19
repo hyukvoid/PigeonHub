@@ -129,6 +129,19 @@ class CliCoreTests(unittest.TestCase):
             self.credentials,
         )
 
+    def test_delivery_note_never_calls_a_failed_publish_ok(self):
+        # BETA-003A: an unauthorized publish has no push_status; the note must
+        # say failed, not the misleading "OK".
+        unauthorized = core.PublishResult(False, 401, {"error": "unauthorized"})
+        self.assertIn("failed", core._delivery_note(unauthorized))
+        self.assertNotIn("OK", core._delivery_note(unauthorized))
+        network_down = core.PublishResult(False, 0, {"error": "conn"})
+        self.assertIn("network error", core._delivery_note(network_down))
+        stored = core.PublishResult(True, 200, {"stored": True, "push_status": "fcm_accepted"})
+        self.assertEqual(core._delivery_note(stored), " OK")
+        saved = core.PublishResult(True, 200, {"stored": True, "push_status": "failed"})
+        self.assertEqual(core._delivery_note(saved), " saved, delivery failed")
+
     @property
     def endpoint(self):
         host, port = self.server.server_address

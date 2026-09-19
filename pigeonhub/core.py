@@ -250,6 +250,10 @@ def publish_payload(payload: Mapping[str, Any], state: str) -> PublishResult:
 
 
 def _delivery_note(result: PublishResult) -> str:
+    if not result.ok:
+        # A failed publish must never read as success (e.g. a 401 has no
+        # push_status, which used to print a misleading "OK").
+        return f" failed (HTTP {result.status or 'network error'})"
     if result.delivered:
         return " OK" if not result.body.get("idempotent_replay") else " OK (replayed)"
     return " saved, delivery failed"

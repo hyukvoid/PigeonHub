@@ -262,9 +262,16 @@ class RealSubprocessInjectionTests(unittest.TestCase):
         )
         env_patch = patch.dict("os.environ", {"MARKER": str(marker)})
         env_patch.start()
+        # The child stays a real subprocess; only the HTTP publishing is
+        # sandboxed. This test must never transmit the malicious prompt to a
+        # real worker (BETA-003A isolation fix: it previously relied on
+        # whatever credentials the developer machine happened to have).
+        publish_patch = patch("pigeonhub.core.publish_job_detailed", return_value=core.PublishResult(True, 200, {"stored": True}))
+        publish_patch.start()
         try:
             exit_code = recipes.run_recipe("argv-echo", path=recipe_path)
         finally:
+            publish_patch.stop()
             env_patch.stop()
         received = json.loads(marker.read_text(encoding="utf-8"))
         return exit_code, received
