@@ -60,6 +60,10 @@ STRINGS = {
         "r_transcript": "전체 대화 기록",
         "cancel": "취소",
         "confirm": "연결",
+        "connect_fail": "연결하지 못했어요. 다시 시도해 주세요.",
+        "retry": "다시 시도",
+        "removing": "제거 중…",
+        "remove_fail": "제거하지 못했어요. 잠시 후 다시 시도해 주세요.",
         "test_title": "PigeonHub를 테스트해요",
         "test_body": "휴대폰으로 테스트 알림을 보낼게요.",
         "send_test": "테스트 알림 보내기",
@@ -123,6 +127,10 @@ STRINGS = {
         "r_transcript": "full transcript",
         "cancel": "Cancel",
         "confirm": "Connect",
+        "connect_fail": "We couldn't connect. Please try again.",
+        "retry": "Retry",
+        "removing": "Removing…",
+        "remove_fail": "We couldn't remove it. Please try again shortly.",
         "test_title": "Test PigeonHub",
         "test_body": "We'll send a test notification to your phone.",
         "send_test": "Send test notification",
@@ -181,6 +189,11 @@ _TEMPLATE = """<!doctype html>
   ul { margin:6px 0; padding-left:20px; }
   .mono { font-family:Consolas,monospace; background:#ececf7; border-radius:8px; padding:10px 14px; display:inline-block; margin:8px 0; }
   .hidden { display:none; }
+  /* The modal visibility is class-driven only: an inline display:flex here
+     would defeat .hidden (BETA-003 P1 — an always-visible empty modal that
+     also swallowed every click behind its backdrop). */
+  #modal { display:none; position:fixed; inset:0; background:rgba(20,20,40,.45); align-items:center; justify-content:center; z-index:50; }
+  #modal.open { display:flex; }
   .msg { color:var(--muted); font-size:14px; min-height:20px; margin-top:10px; }
   .big { font-size:42px; }
 </style></head>
@@ -252,10 +265,11 @@ _TEMPLATE = """<!doctype html>
     <button class="cta" onclick="finish()">__FINISH__</button>
   </section>
 
-  <div id="modal" class="hidden" style="position:fixed;inset:0;background:rgba(20,20,40,.45);display:flex;align-items:center;justify-content:center;">
+  <div id="modal">
     <div class="card" style="max-width:460px;width:92vw;margin:0">
       <h2 id="mTitle"></h2>
       <div id="mBody"></div>
+      <div id="mStatus" class="msg"></div>
       <div style="display:flex;gap:10px;margin-top:16px">
         <button class="ghost" style="margin:0" onclick="closeModal()">__CANCEL__</button>
         <button class="cta" style="margin:0" id="mOk">__CONFIRM__</button>
@@ -274,13 +288,35 @@ function t(key, vars) {
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;
 }
-async function post(action, extra) {
-  const r = await fetch('/api/action?session=' + SESSION, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(Object.assign({action: action}, extra || {})),
-  });
-  return r.json();
+async function post(action, extra, timeoutMs) {
+  // Every action gets a hard timeout: a hung backend must surface as a
+  // recoverable error, never as a frozen page.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || 20000);
+  try {
+    const r = await fetch('/api/action?session=' + SESSION, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(Object.assign({action: action}, extra || {})),
+      signal: controller.signal,
+    });
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// Modal plumbing: exactly one place opens/closes it, so the visible state
+// can never drift from the DOM state.
+function showModal() { document.getElementById('modal').classList.add('open'); }
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  setStatus('');
+}
+function setStatus(html) { document.getElementById('mStatus').innerHTML = html; }
+function setModalBusy(busy) {
+  document.getElementById('mOk').disabled = busy;
+  const cancel = document.querySelector('#modal .ghost');
+  if (cancel) cancel.disabled = busy;
 }
 async function status() {
   const r = await fetch('/api/status?session=' + SESSION);
@@ -399,12 +435,37 @@ function confirmConnect(agent) {
     '<ul style="color:var(--muted)"><li>' + t('r_prompt') + '</li><li>' + t('r_source') + '</li><li>' + t('r_transcript') + '</li></ul>';
   document.getElementById('mOk').textContent = t('confirm');
   document.getElementById('mOk').onclick = async () => {
-    closeModal();
-    await post('SETUP_' + agent.toUpperCase(), {confirm: true});
-    if (agent === 'codex') showCodexTrust();
-    renderAgents();
+    await runAgentAction('SETUP_' + agent.toUpperCase(), 'connect_fail', 'confirm');
   };
-  document.getElementById('modal').classList.remove('hidden');
+  setStatus('');
+  showModal();
+}
+// One shared runner for connect/remove: double-click safe (busy disables
+// both buttons), hard timeout, and a recoverable error — never a raw
+// exception and never a silent freeze.
+async function runAgentAction(action, failKey, busyLabelKey) {
+  const okBtn = document.getElementById('mOk');
+  if (okBtn.disabled) return; // double-click guard
+  setModalBusy(true);
+  const busyNote = action.startsWith('REMOVE_') ? t('removing') : t('busy');
+  setStatus('<p style="color:var(--muted)">' + busyNote + '</p>');
+  try {
+    const r = await post(action, {confirm: true}, 20000);
+    if (r && r.ok) {
+      closeModal();
+      await renderAgents();
+      return;
+    }
+    showActionError(failKey, busyLabelKey);
+  } catch (e) {
+    showActionError(failKey, busyLabelKey);
+  } finally {
+    setModalBusy(false);
+  }
+}
+function showActionError(failKey, retryLabelKey) {
+  setStatus('<p style="color:var(--warn)">' + t(failKey) + '</p>');
+  document.getElementById('mOk').textContent = t(retryLabelKey);
 }
 function showCodexTrust() {
   // Codex requires its own in-app trust; surface the guidance, never bypass it.
@@ -412,12 +473,19 @@ function showCodexTrust() {
   document.getElementById('mBody').innerHTML = '<p>' + t('codex_trust_body') + '</p>';
   document.getElementById('mOk').textContent = t('open_codex');
   document.getElementById('mOk').onclick = () => { closeModal(); };
-  document.getElementById('modal').classList.remove('hidden');
+  setStatus('');
+  showModal();
 }
 async function removeAgent(agent) {
   if (!confirm(t('remove_confirm'))) return;
-  await post('REMOVE_' + agent.toUpperCase(), {confirm: true});
-  renderAgents();
+  document.getElementById('mTitle').textContent = t('confirm_title', {name: AGENT_NAMES[agent]});
+  document.getElementById('mBody').innerHTML = '<p style="margin:4px 0">' + t('remove_confirm') + '</p>';
+  document.getElementById('mOk').textContent = t('remove');
+  document.getElementById('mOk').onclick = async () => {
+    await runAgentAction('REMOVE_' + agent.toUpperCase(), 'remove_fail', 'remove');
+  };
+  setStatus('');
+  showModal();
 }
 async function sendTest() {
   const btn = document.getElementById('sendTest');
@@ -434,7 +502,6 @@ async function finish() {
   await post('FINISH');
   document.body.innerHTML = '<main><div class="card center" style="margin-top:60px"><div class="big">🕊️</div><h2>PigeonHub</h2><p class="sub">' + T.done_title + '</p></div></main>';
 }
-function closeModal() { document.getElementById('modal').classList.add('hidden'); }
 document.getElementById('langToggle').onclick = async () => {
   const r = await post('SET_LANG', {lang: lang === 'ko' ? 'en' : 'ko'});
   if (r.ok) location.reload();

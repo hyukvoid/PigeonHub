@@ -38,6 +38,18 @@ BETA-003A (HEAD). Report: `docs/reports/beta003a-codex-recovery/`
   source (notify plan first, trusted managed hooks fallback).
 - **Honest CLI notes**: `_delivery_note` no longer prints OK for a failed
   publish (401 case); injection test no longer leaks to the real worker.
+- **P1 fix (owner-reported)**: the Setup Center connect modal was always
+  visible and empty (inline `display:flex` defeated `.hidden`) and its
+  backdrop swallowed all clicks → frozen-looking page. Now class-driven,
+  with busy/success/error states, double-click guard, and a hard fetch
+  timeout. Verified by page-structure tests, a real-browser E2E
+  (headless Edge/CDP, 12 checks) and a packaged-exe browser E2E
+  (`tools/agent-e2e-sandbox/setup_center_browser_e2e.py --exe …`).
+  See `docs/reports/beta003a-codex-recovery/P1-SETUP-CENTER-MODAL.md`.
+  Automation knob: `PIGEONHUB_ONBOARD_URL_FILE` hands the session URL to a
+  caller-specified file instead of opening a browser (opt-in; default
+  unchanged). `SetupServer` quietly ignores Windows loopback
+  ConnectionAborted noise.
 - **Evidence**: real 0.152.1 notify payload captured
   (`tools/agent-e2e-sandbox/notify_probe.log`); packaged-exe E2E
   (`packaged_codex_e2e.py`) = PASS end to end; silent upgrade

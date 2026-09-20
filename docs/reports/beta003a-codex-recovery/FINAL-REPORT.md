@@ -3,6 +3,18 @@
 Date: 2026-09-20 · Branch `autonomous/beta003a-codex-recovery-20260920`
 (base `ee6308f`) · CLI 0.20.0-beta.2 · Android 0.3.0-beta003a (versionCode 4)
 
+## P1 addendum (owner-reported, fixed same night)
+
+The owner's real-browser test exposed a P1: the tool-connection modal was
+empty and the page appeared frozen. Root cause: an inline `display:flex` on
+`#modal` defeated the `.hidden` rule, so the modal was always visible, its
+backdrop swallowed every click, and it could never be closed. Fixed
+(class-driven visibility + busy/success/error/timeout states + double-click
+guard) and re-verified at three levels — page-structure tests, real-browser
+E2E (headless Edge/CDP, 12 checks), and a packaged-exe browser E2E against
+the exe's own Setup Center server (12 checks). Details:
+P1-SETUP-CENTER-MODAL.md. Regression: Python 109/109.
+
 ## Verdict: **CONDITIONAL_PRIVATE_BETA_READY**
 
 The zero-command Codex journey is implemented, packaged, and proven end to

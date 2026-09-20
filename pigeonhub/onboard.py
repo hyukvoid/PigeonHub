@@ -32,6 +32,7 @@ import base64
 import json
 import os
 import secrets
+import sys
 import threading
 import time
 import urllib.parse
@@ -386,6 +387,20 @@ class SetupCenter:
     server: ThreadingHTTPServer | None = None
 
 
+class SetupServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        # A browser (or a busy CI loopback) dropping the TCP connection
+        # mid-request is routine on Windows (WinError 10053); it is not a
+        # server fault and must neither crash a worker thread's output nor
+        # print a stack trace.
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
+
+
 def _is_same_origin_host(handler: "SetupHandler") -> bool:
     for header in ("Origin", "Referer"):
         value = handler.headers.get(header)
@@ -465,7 +480,7 @@ class SetupHandler(BaseHTTPRequestHandler):
 def serve(center: SetupCenter | None = None) -> tuple[SetupCenter, str]:
     """Start the Setup Center on a random loopback port. Returns (center, url)."""
     center = center or SetupCenter()
-    server = ThreadingHTTPServer(("127.0.0.1", 0), SetupHandler)
+    server = SetupServer(("127.0.0.1", 0), SetupHandler)
     server.center = center  # type: ignore[attr-defined]
     center.server = server
     thread = threading.Thread(target=server.serve_forever, daemon=True)

@@ -277,6 +277,7 @@ def _run_onboard() -> int:
     """Ephemeral Setup Center: loopback server + browser; dies with the session."""
     import os
     import webbrowser
+    from pathlib import Path
 
     from .onboard import SESSION_TTL_SECONDS, serve
 
@@ -290,10 +291,21 @@ def _run_onboard() -> int:
         except Exception:
             pass
     center, url = serve()
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
+    url_file = os.environ.get("PIGEONHUB_ONBOARD_URL_FILE")
+    if url_file:
+        # Opt-in automation hook (used by the browser E2E): hand the session
+        # URL to a caller-specified local file instead of opening a browser.
+        # Default behavior is unchanged — by design the token is still never
+        # printed or logged.
+        try:
+            Path(url_file).write_text(url, encoding="utf-8")
+        except OSError:
+            pass
+    else:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
     print("PigeonHub Setup Center is open in your browser.")
     print("Keep this window open until you finish; closing it (or finishing in the")
     print(f"browser) ends setup. The session expires after {SESSION_TTL_SECONDS // 60} minutes.")

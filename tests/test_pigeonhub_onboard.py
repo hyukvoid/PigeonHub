@@ -37,13 +37,22 @@ class OnboardServerTests(unittest.TestCase):
         ob.POLL_INTERVAL_SECONDS = self._old_interval
 
     def request(self, method, path, body=None, headers=None):
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=10)
-        payload = json.dumps(body).encode() if body is not None else None
-        conn.request(method, path, payload, headers or ({"Content-Type": "application/json"} if payload else {}))
-        response = conn.getresponse()
-        data = response.read()
-        conn.close()
-        return response.status, data
+        # Windows loopback can abort an in-flight connection (WinError 10053)
+        # under load; that is transport noise, not server behavior. Retry the
+        # logical request once on such aborts only.
+        last_exc = None
+        for _attempt in range(2):
+            try:
+                conn = http.client.HTTPConnection(self.host, self.port, timeout=10)
+                payload = json.dumps(body).encode() if body is not None else None
+                conn.request(method, path, payload, headers or ({"Content-Type": "application/json"} if payload else {}))
+                response = conn.getresponse()
+                data = response.read()
+                conn.close()
+                return response.status, data
+            except (ConnectionAbortedError, ConnectionResetError, OSError) as exc:
+                last_exc = exc
+        raise last_exc
 
     # ---- binding / session gate ------------------------------------------
     def test_binds_loopback_only_on_random_port(self):
@@ -399,6 +408,55 @@ def urllib_split(url):
         "session": parse_qs(parts.query)["session"][0],
         "path": parts.path,
     }
+
+
+class SetupCenterPageContractTests(unittest.TestCase):
+    """P1 regression: the served page itself must carry the modal contract.
+
+    The BETA-003 bug (an always-visible empty modal that swallowed every
+    click behind its backdrop) was invisible to API-level tests — these
+    assertions pin the page structure that a real browser depends on.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from pigeonhub.onboard_pages import STRINGS, render_page
+
+        cls.strings = STRINGS
+        cls.page = render_page("session-token", "ko")
+        cls.page_en = render_page("session-token", "en")
+
+    def test_modal_visibility_is_class_driven_only(self):
+        modal_div = next(line for line in self.page.splitlines() if 'id="modal"' in line)
+        self.assertNotIn("display:", modal_div, "inline display would defeat the hidden rule (CSS specificity)")
+        self.assertIn("#modal { display:none", self.page)
+        self.assertIn("#modal.open { display:flex", self.page)
+
+    def test_single_close_modal_definition(self):
+        self.assertEqual(self.page.count("function closeModal("), 1, "a later duplicate definition would override the class-based close")
+
+    def test_show_and_close_toggle_open_class(self):
+        self.assertIn("classList.add('open')", self.page)
+        self.assertIn("classList.remove('open')", self.page)
+
+    def test_actions_have_timeout_busy_and_recoverable_error(self):
+        self.assertIn("AbortController", self.page)
+        self.assertIn("setTimeout(() => controller.abort()", self.page)
+        self.assertIn("if (okBtn.disabled) return", self.page)  # double-click guard
+        self.assertIn("runAgentAction", self.page)
+
+    def test_modal_strings_exist_in_both_locales(self):
+        for key in ("confirm_title", "confirm_receives", "confirm_not", "connect_fail", "retry", "removing", "remove_fail", "busy", "cancel", "confirm"):
+            self.assertIn(key, self.strings["ko"], key)
+            self.assertIn(key, self.strings["en"], key)
+        self.assertEqual(sorted(self.strings["ko"]), sorted(self.strings["en"]), "KO/EN key parity")
+
+    def test_body_copy_is_static_html_not_empty_by_default(self):
+        # confirmConnect builds the body from static strings; the modal must
+        # never rely on a server round-trip to have content.
+        self.assertIn("mBody').innerHTML", self.page)
+        for key in ("confirm_receives", "r_prompt", "r_source", "r_transcript"):
+            self.assertIn(key, self.page)
 
 
 if __name__ == "__main__":
