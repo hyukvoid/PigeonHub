@@ -1,224 +1,278 @@
 # PigeonHub
 
-Start it. Walk away.
-PigeonHub tells you when it matters.
+**Developer & AI-agent push inbox for Android.**
 
-Long-running jobs on your PC or in the cloud — crawlers, builds, renders, AI
-agents — report their lifecycle to the PigeonHub Android Job Inbox: `RUNNING`,
-`PROGRESS`, `DONE`, `FAILED`, and `NEEDS_ACTION`, with a push only when it
+Send a `curl`, finish a GitHub Actions workflow, or emit a structured
+AI-agent event — PigeonHub turns it into a durable Android notification
+and inbox entry.
+
+## PigeonHub in action
+
+<p align="center">
+  <img src="docs/screenshots/01-inbox.png" width="220" />
+  <img src="docs/screenshots/02-connections.png" width="220" />
+  <img src="docs/screenshots/03-agent-event.png" width="220" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/04-notification.png" width="220" />
+  <img src="docs/screenshots/05-github-inbox.png" width="220" />
+</p>
+
+*Inbox with job state, delivery metadata (`seq`, `via FCM`) and coalesced
+agent sessions · Connections (GitHub App, AI agents, PC) · Android
+notification shade.*
+
+## Why PigeonHub?
+
+Long work finishes (or gets stuck) while you are away:
+
+- CI/CD pipelines and builds end in success or failure
+- AI coding agents complete tasks — or block waiting on your approval
+- crawlers, renders, and training runs run for hours
+
+PigeonHub gives all of those systems **one HTTP destination**, and gives
+the developer **one Android inbox**: durable, ordered, and quiet until it
 matters.
 
-## Install PigeonHub CLI (Windows)
+## Architecture
 
-1. Download `PigeonHub-Setup-<version>.exe` and run it.
-2. Open a **new** PowerShell window and run `pigeonhub login` (scan the QR with
-   the PigeonHub Android app).
-3. Send your first job:
+```mermaid
+graph LR
+    A["curl / scripts"] --> W
+    B["GitHub Actions<br/>(workflow_run webhook)"] --> W
+    C["AI agents<br/>(Agent Event v1)"] --> W
+    W["Cloudflare Worker"] --> D[(Cloudflare D1)]
+    D --> F["FCM HTTP v1"]
+    F --> N["Android notification"]
+    N --> R[(Room inbox)]
+    D -. "snapshot sync / recovery" .-> R
+```
+
+Production backend: **Cloudflare Workers + D1 + FCM** (all on the free
+plan — OAuth2 access tokens for FCM are minted on-device in the Worker
+via RS256 JWT, cached until expiry). The `server/` directory is only a
+local development/reference sender. A scheduled maintenance job performs
+retention cleanup and bounded delivery recovery.
+
+## Core features
+
+- **Private installation bootstrap** — the app generates its own
+  management secret + write token (Keystore-encrypted, persisted before
+  any network request) and registers through a single-use invite code;
+  every installation gets a private publish endpoint
+- **Durable-before-push** — every message is persisted to D1 (`pending`)
+  before FCM is attempted; push is a transport, never the source of truth
+- **Idempotency** — `Idempotency-Key` (or message id) replays converge on
+  one stored row; duplicates are absorbed client-side too
+- **Per-channel sequence** — strict `(channel_id, seq)` ordering across
+  concurrent senders
+- **Snapshot sync & bounded recovery** — the app pages history from D1
+  (cursor-based) and can recover missed deliveries after being offline
+- **Server-side progress coalescing** — chatty `PROGRESS` events for the
+  same job collapse into one card with an update counter
+- **Retention maintenance** — scheduled cleanup + bounded redelivery
+- **FCM token refresh** — tokens rotate transparently; stale tokens are
+  isolated without losing the channel
+- **GitHub Actions integration** — GitHub App + `workflow_run` webhook,
+  HMAC-verified, fanned out to every device of the installation owner
+- **AI Agent Event v1** — structured, validated agent lifecycle events
+- **Windows CLI + agent integrations** — `pigeonhub` wraps any long-running
+  command (or recipe) and reports its lifecycle; native hooks for Codex,
+  Claude, Grok, and ZCode; one-command Setup Center onboarding
+- **Android** — Kotlin + Jetpack Compose + Material 3, Room inbox, two
+  notification channels (normal / high), KO/EN localization
+
+## Quick start
+
+### 1. Pair a device
+
+Install the Android app, generate an invite, and bootstrap — or open the
+in-app **My Push** card and copy your personal cURL. Every installation
+owns a private endpoint of the form:
+
+```text
+https://<worker>/v1/channels/<channel_id>/messages
+```
+
+### 2. Send a push
+
+```bash
+curl -X POST "$PIGEONHUB_ENDPOINT" \
+  -H "Authorization: Bearer $PIGEONHUB_WRITE_TOKEN" \
+  -H "Idempotency-Key: deploy-001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Deploy complete",
+    "message": "Production rollout finished successfully.",
+    "priority": "normal",
+    "url": "https://github.com/example/project/actions"
+  }'
+```
+
+`title` and `message` are required; `priority` is `normal|high`;
+`url` is optional and **https-only**. Never commit real credentials.
+
+### 3. Track a long-running job (Windows CLI)
 
 ```powershell
+pigeonhub login                       # pair: scan the QR with the app
 pigeonhub run --name "Crawler" -- python crawler.py
 ```
 
-That's the whole loop: the job shows up on your phone, and you get a push when
-it finishes or needs you. No Python install, no PATH editing, no background
-daemon — `pigeonhub` is a single command-line tool.
-
-Upgrading: run the newer setup over the old one (your login is kept).
-Uninstalling: remove it from Windows "Installed apps" (your login is kept;
-run `pigeonhub logout` to remove it explicitly).
-No code-signing certificate yet: Windows SmartScreen may ask for
-"More info → Run anyway" on the first install.
-
-### Building the installer from source (maintainers)
-
-```powershell
-powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
-# artifacts: dist\pigeonhub.exe, dist\PigeonHub-Setup-<version>.exe, dist\SHA256SUMS.txt
-```
-
-## Repository layout
-
-| Path | What it is |
-| --- | --- |
-| `android/` | Android app (Kotlin, Jetpack Compose, Material 3, FCM) |
-| `worker/` | **Production transport**: Cloudflare Worker → D1 durable accept (idempotency, quota, seq) → OAuth2 (RS256 JWT) → FCM HTTP v1 (Workers/D1 **Free** plan) |
-| `server/` | Local dev sender (Fastify + firebase-admin) — kept as a regression/reference tool |
-| `docs/` | Setup guides, payload contract, session reports |
-| `pigeonhub/` | MVP-016 user-facing CLI: login, lifecycle wrapper, progress, notifications |
-
-> **Backend direction (decided):** production is **Cloudflare Workers + D1 + FCM**.
-> **Private installations are live**: a fresh Android install generates its own
-> management secret + write token (Keystore-encrypted, persisted before any
-> network request), bootstraps with a single-use invite code, and gets a private
-> publish endpoint. Copy cURL from the app and push yourself — no FCM token
-> handling, no server-issued secrets. Reports:
-> [mvp-001b-d1-durable-core](docs/mvp-001b-d1-durable-core-report.md) ·
-> [mvp-001c-retry-safe-bootstrap](docs/mvp-001c-retry-safe-bootstrap-report.md)
-
-### PigeonHub CLI — commands
-
-The normal path is a declared command, not a background daemon:
-
-```bash
-pigeonhub login
-pigeonhub run --name "Product crawler" -- python crawler.py
-```
-
-`pigeonhub login` creates a short-lived PC login request, displays a QR in the
-terminal, waits for the Android user to scan and approve it, and stores only
-the connector credential locally. The old `pair --code` / `--qr-image` path is
-retained for protocol compatibility.
-
-Inside a running command, the inherited job context makes lifecycle updates
-possible without a vendor-specific connector:
+The job appears on your phone (`RUNNING` → `PROGRESS` → `DONE`), the child
+process keeps its own stdout/exit code, and inside the job you can report
+fine-grained state:
 
 ```bash
 pigeonhub progress 42 100
 pigeonhub needs-action "Please choose the output folder"
-pigeonhub notify "Build note" "The cache was warmed"
 ```
 
-`run` publishes `RUNNING` before starting the child. If that publish cannot be
-accepted, the child is not started. The child receives `PIGEONHUB_JOB_ID`, and
-its stdout, stderr, and exit code are preserved. `logout` removes the local
-credential; `status` reports local login and worker reachability.
+Frequent commands can be saved as **recipes** and re-run with one line.
+`pigeonhub onboard` opens a local Setup Center in the browser (loopback
+only, ephemeral) that walks through phone pairing and tool connections —
+including zero-command Codex/ZCode integration.
 
-AI coding agents can report their lifecycle through the same Job Model:
-`pigeonhub setup codex|claude|grok|zcode` installs vendor-native hooks with a
-preview, backup, and safe removal — see
-[docs/reports/mvp017-agent-integrations/](docs/reports/mvp017-agent-integrations/).
+## AI Agent Event v1
 
-Developers working on the CLI itself run it from source with
-`python -m pip install -e .` (Python ≥ 3.10).
+Agents attach a validated `agent_event` to a publish call:
 
-### Worker quick start
+```json
+{
+  "title": "Agent needs approval",
+  "message": "Production deployment is waiting for confirmation.",
+  "priority": "high",
+  "agent_event": {
+    "eventType": "agent.attention_required",
+    "attentionReason": "approval",
+    "provider": "zcode",
+    "runId": "deploy-prod-7",
+    "summary": "Production deploy is waiting for confirmation."
+  }
+}
+```
+
+| Field | Value |
+| --- | --- |
+| `eventType` | `agent.started` · `agent.finished` · `agent.blocked` · `agent.attention_required` · `agent.attention_resolved` |
+| `attentionReason` | `input` · `approval` · `permission` · `clarification` · `other` (attention events only) |
+| `blockedReason` | `rate_limit` · `quota` · `auth` · `environment` · `tool_failure` · `other` (blocked events only) |
+
+Events are validated server-side (unknown types/reasons are rejected
+before storage), and attention-worthy events map to Android's high
+priority channel. PigeonHub does not natively embed specific AI
+frameworks — anything that can POST JSON is an agent client, and the
+`pigeonhub setup <agent>` command installs vendor-native hooks for the
+agents it knows.
+
+## GitHub Actions integration
+
+```text
+GitHub Actions workflow completes
+        ↓
+workflow_run.completed  (webhook, HMAC-SHA-256 verified)
+        ↓
+PigeonHub Worker  →  D1 durable message
+        ↓
+FCM fan-out to every device of the installation owner
+        ↓
+Android notification + inbox entry
+```
+
+Install the GitHub App from the app's Connections tab; per-run messages
+include conclusion, branch, and a link to the run. Evidence:
+[owner-scoped fan-out](docs/reports/mvp-003b-owner-scoped-fanout.md),
+[clean-AVD E2E verification](docs/reports/mvp-003b-clean-avd-e2e-verification.md),
+[root-cause audit](docs/reports/mvp-003b-root-cause-audit.md).
+
+## Reliability model
+
+Every publish flows through the same pipeline:
+
+```text
+1. Validate payload (reject before any side effect)
+2. Check idempotency (replay-safe)
+3. Enforce quota
+4. Insert into D1 as pending   ← durable before any push
+5. Attempt FCM (OAuth2 token cached)
+6. Persist delivery result
+7. Android recovers history through snapshot sync
+```
+
+**FCM is a delivery transport. D1 is the durable source of truth.**
+
+Message state machine: `pending → fcm_accepted | failed`. A 200 response
+means the row is durable even when FCM delivery failed; the Android app
+reconciles through cursor-based sync, and a scheduled maintenance pass
+performs retention cleanup and bounded redelivery.
+
+## Repository structure
+
+| Path | What it is |
+| --- | --- |
+| `worker/src/` | Production transport: routes, D1 access, FCM client + GCP auth, GitHub webhook/connection, agent events, job coalescing, maintenance |
+| `android/` | Android app (Kotlin, Compose, Material 3, Room inbox, FCM) |
+| `pigeonhub/` | Windows CLI: pairing, job wrapper, recipes, agent setup, Setup Center onboarding, Codex auto-connect |
+| `server/` | Local development/reference sender (Fastify + firebase-admin), kept for regression |
+| `packaging/windows/` | PyInstaller one-file build + Inno Setup installer |
+| `docs/` | Setup guides, payload contract, and per-milestone evidence reports |
+
+## Build
+
+### Worker
 
 ```bash
 cd worker
 npm install
-npx wrangler secret put FIREBASE_CLIENT_EMAIL     # service account client_email
-npx wrangler secret put FIREBASE_PRIVATE_KEY      # PEM or base64(PEM)
-npx wrangler secret put FCM_TEST_DEVICE_TOKEN     # from the app Device tab
-npx wrangler secret put PUSH_BEARER_SECRET        # any random dev bearer
-npx wrangler deploy                               # https://<name>.<subdomain>.workers.dev
+npm run typecheck
 ```
 
-```bash
-curl -X POST https://pigeonhub-push.pigeonhub.workers.dev/push \
-  -H "Authorization: Bearer $PUSH_BEARER_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Build Complete","message":"Deployment succeeded","priority":"high","url":"https://example.com"}'
-```
+Deploy secrets (never committed): `FIREBASE_CLIENT_EMAIL`,
+`FIREBASE_PRIVATE_KEY`. See `worker/wrangler.jsonc`.
 
-Local development: put the same four values in `worker/.dev.vars`
-(gitignored) and run `npx wrangler dev`. Responses carry a non-secret
-`X-PigeonHub-Auth: fresh|cache` header for cold/warm OAuth observation.
-
-## Android app
-
-- `applicationId` is **fixed**: `com.pigeonhub.app`. Never change it to match an
-  existing Firebase project.
-- Single module, no Hilt/Room/WorkManager — deliberately boring so it builds.
-- Push pipeline (`android/app/src/main/java/com/pigeonhub/app/push/`):
-  `PushPayloadValidator` → `MessageDeduper` (in-memory + SharedPreferences LRU,
-  Room-swap-ready interface) → `InboxStore` → `NotificationRenderer`.
-- Two notification channels: **PigeonHub Normal** (importance default) and
-  **PigeonHub High** (importance high / heads-up capable). The sender's
-  `priority` only chooses the channel; Android importance stays user-controlled.
-- FCM boundary: `PigeonMessagingService` is real code behind a guard
-  (`FirebaseGate`). Without Firebase config the app runs normally and the
-  Device tab reports `BLOCKED_PENDING_FIREBASE_SETUP`.
-- UI: **Inbox** (in-memory list, empty state "No notifications yet"),
-  **Device** (FCM status, permission, channels, test push buttons, adb recipe),
-  **Settings** (permission + system settings + about).
-
-### Build
+### Android
 
 ```bash
 cd android
-./gradlew :app:assembleDebug        # or: gradle :app:assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-No Firebase config is required to build.
+No Firebase config is required to build. `applicationId` is fixed:
+`com.pigeonhub.app`.
 
-### Test a push without Firebase
+### Windows CLI
 
-Open the app → **Device** tab → *Test push* buttons, or from adb (cold process):
-
-```bash
-adb shell am broadcast -a app.pigeonhub.debug.TEST_PUSH \
-  -n com.pigeonhub.app/.debug.TestPushReceiver \
-  --es title "Build Complete" --es message "Deployment succeeded" \
-  --es priority high --es url https://example.com \
-  --es message_id "fixed-id-1"
+```powershell
+python -m pip install -e .            # from source (Python ≥ 3.10)
+powershell -File packaging\windows\build.ps1   # exe + installer artifacts
 ```
 
-## Local dev sender (server/)
+## Security
 
-Node.js LTS ≥ 20, npm.
+- No Firebase service-account JSON, no `.env`, no FCM tokens, and no
+  invite codes are committed
+- The Android app never holds Firebase admin credentials; registration
+  credentials are Keystore-encrypted and generated on-device
+- Channel write tokens are private per installation; the app masks the
+  FCM token and offers explicit copy actions only
+- GitHub webhooks are HMAC-SHA-256 signature-verified
+  (`X-Hub-Signature-256`)
+- AI-agent events carry bounded, allow-listed metadata only — no prompts,
+  transcripts, or file contents cross the boundary
+- The Setup Center binds to `127.0.0.1` on a random port, is gated by a
+  session token, and exposes a fixed action allowlist (no command
+  execution)
 
-```bash
-cd server
-npm install
-cp .env.example .env     # FCM_DEVICE_TOKEN can be any placeholder in mock mode
-npm start                # http://127.0.0.1:8787
-```
+## Status
 
-- Without a service account it starts in **mock** mode: every request is
-  validated and the exact FCM payload is logged, nothing reaches a device.
-- With `FIREBASE_SERVICE_ACCOUNT_PATH` set it sends for real. See
-  [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) and `server/.env.example`.
+- The production path — REST sender / GitHub webhook / AI-agent event →
+  Cloudflare Worker → D1 → FCM → Android notification + inbox — is
+  **implemented**, and end-to-end delivery has been verified on the
+  Android emulator, including owner-scoped multi-device fan-out,
+  stale-token isolation, and webhook redelivery idempotency
+- A final physical-device verification pass (real Galaxy:
+  pairing-state UX, reboot persistence, desktop-app completion push)
+  remains the last open item
 
-```bash
-# health: shows transport mode
-curl http://localhost:8787/health
-
-# push (mock mode logs it; fcm mode delivers to the device)
-curl -X POST http://localhost:8787/push \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Build Complete",
-    "message": "Deployment succeeded",
-    "priority": "high",
-    "url": "https://example.com"
-  }'
-```
-
-Response:
-
-```json
-{
-  "ok": true,
-  "mode": "mock",
-  "message_id": "6f1c9...",
-  "sent_at": "2026-09-11T01:23:45.678Z",
-  "priority": "high",
-  "fcm_message_id": "mock/6f1c9..."
-}
-```
-
-Replay the same `message_id` (pass `"message_id": "..."` in the body) to verify
-the device-side duplicate suppression.
-
-## Payload contract (v1)
-
-Data-only FCM message; exact field rules in [docs/PAYLOAD.md](docs/PAYLOAD.md).
-Required: `message_id`, `title`, `message`. Optional: `priority`
-(`normal`/`high`), `url` (**https only**), `sent_at`, `schema_version`.
-
-## Security rules enforced in this repo
-
-- No `google-services.json`, no Firebase service account JSON, no FCM tokens,
-  no `.env` files are ever committed (see `.gitignore`).
-- The Android app never embeds Firebase admin credentials.
-- The sender redacts `Authorization` headers from logs and masks device tokens
-  in mock output.
-- The debug screen never displays the full FCM token (masked display + explicit
-  copy action only).
-
-## Next milestone (not started)
-
-MVP-001: Firebase Anonymous Auth, Cloudflare D1 device registry, private
-channels with write tokens, server-side message persistence. See
-[docs/NEXT_PHASE.md](docs/NEXT_PHASE.md).
+Detailed per-milestone evidence lives in [`docs/reports/`](docs/reports/).
