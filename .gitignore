@@ -68,6 +68,7 @@ worker/.automation-credentials.json
 
 # local-only test credentials
 .test-invite-current
+connectors/.agent_session.json
 
 # ---- Python ----
 

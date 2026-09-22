@@ -143,6 +143,7 @@ Agents attach a validated `agent_event` to a publish call:
   "message": "Production deployment is waiting for confirmation.",
   "priority": "high",
   "agent_event": {
+    "eventId": "deploy-prod-7-attention",
     "eventType": "agent.attention_required",
     "attentionReason": "approval",
     "provider": "zcode",
@@ -154,9 +155,9 @@ Agents attach a validated `agent_event` to a publish call:
 
 | Field | Value |
 | --- | --- |
+| `eventId` | required — your id for this event (1–128 chars) |
 | `eventType` | `agent.started` · `agent.finished` · `agent.blocked` · `agent.attention_required` · `agent.attention_resolved` |
-| `attentionReason` | `input` · `approval` · `permission` · `clarification` · `other` (attention events only) |
-| `blockedReason` | `rate_limit` · `quota` · `auth` · `environment` · `tool_failure` · `other` (blocked events only) |
+| `attentionReason` | required for `agent.attention_required` — one of `input` · `approval` · `permission` · `clarification` · `other`; also required for `agent.blocked`, then one of `rate_limit` · `quota` · `auth` · `environment` · `tool_failure` · `other` |
 
 Events are validated server-side (unknown types/reasons are rejected
 before storage), and attention-worthy events map to Android's high
